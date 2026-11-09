@@ -1,0 +1,8 @@
+/* Global Rofi runtime configuration overrides
+ * Ensures terminal-based apps launched from drun/run use ghostty (install.sh switches this to kitty if ghostty is missing) instead of xterm.
+ */
+configuration {
+  terminal: "ghostty";
+  // keep run-shell explicit to avoid theme overrides changing behavior
+  run-shell-command: "{terminal} -e {cmd}";
+}

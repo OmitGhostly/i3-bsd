@@ -1,0 +1,28 @@
+/* ---- 💫 https://github.com/LinuxBeginnings 💫 ---- */
+/* Main Config Calculator */
+/* Submitted by: https://github.com/JosephArmas */
+
+@import "~/.config/i3/rofi/config.rasi" 
+
+/* ---- Mainbox ---- */
+mainbox {
+  children: [ "entry", "message", "listview" ];   /* (listview stays in the layout, hidden below: rofi 1.7 crashes without one) */
+  height: inherit;
+}
+
+/* ---- Window ---- */
+window {
+  width: 30%;
+  height: inherit;
+}
+
+/* ---- Entry ---- */
+entry {
+  expand: true;
+  placeholder: " 🧮 Calculate";
+}
+
+/* ---- Listview (no list: the answer shows in the message line) ---- */
+listview {
+  enabled: false;
+}

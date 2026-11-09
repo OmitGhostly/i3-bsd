@@ -1,0 +1,49 @@
+/* ---- 💫 https://github.com/LinuxBeginnings 💫 ---- */
+/* Clipboard Config - Clipboard */
+
+@import "~/.config/i3/rofi/config.rasi"  
+
+/* ---- Window ---- */
+window {
+  width: inherit;
+  height: inherit;
+}
+
+/* ---- Mainbox ---- */
+mainbox {
+  children:
+    [ "inputbar", "message", "listview"];
+}
+
+/* ---- Entry ---- */
+entry {
+  width: inherit;
+  placeholder: " 📋 Search  Clipboard ";
+}
+
+/* ---- Listview ---- */
+listview {
+  columns: 1;
+  lines: 8;
+  fixed-height: true;
+  spacing: 6px;
+  cycle: true;
+}
+
+/* ---- Elements ---- */
+element {
+  orientation: horizontal;
+  margin: 0px;     /* (the default theme's spacing: the card themes' bigger cards made */
+  padding: 10px;   /*  eight rows taller than a laptop screen) */
+}
+
+element-icon {
+  size: 0%;
+}
+
+element-text {
+  horizontal-align: 0.0;
+  vertical-align: 0.5;
+  margin: 0px;
+  padding: 0px;
+}

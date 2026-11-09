@@ -1,0 +1,110 @@
+# i3wm-dots: yazi in black and greys with your accent colour. The Settings window (Colors) rewrites this file
+# when you change the colour - delete these first lines to make it your own, it is then left alone.
+
+[mgr]
+cwd             = { fg = "#ffffff", bold = true }
+find_keyword    = { fg = "#000000", bg = "#ffffff", bold = true }
+find_position   = { fg = "#bfbfbf", bold = true, italic = true }
+symlink_target  = { fg = "#8c8c8c", italic = true }
+marker_copied   = { fg = "#e6e6e6", bg = "#e6e6e6" }
+marker_cut      = { fg = "#6e6e6e", bg = "#6e6e6e" }
+marker_marked   = { fg = "#bfbfbf", bg = "#bfbfbf" }
+marker_selected = { fg = "#ffffff", bg = "#ffffff" }
+count_copied    = { fg = "#000000", bg = "#e6e6e6" }
+count_cut       = { fg = "#000000", bg = "#8c8c8c" }
+count_selected  = { fg = "#000000", bg = "#ffffff" }
+border_symbol   = "│"
+border_style    = { fg = "#303030" }
+# (the highlighted row in yazi before 26 - newer ones use [indicator] below)
+hovered         = { fg = "#000000", bg = "#ffffff" }
+preview_hovered = { fg = "#000000", bg = "#8c8c8c" }
+
+[indicator]
+parent  = { fg = "#000000", bg = "#8c8c8c" }
+current = { fg = "#000000", bg = "#ffffff" }
+preview = { fg = "#000000", bg = "#8c8c8c" }
+
+[tabs]
+active   = { fg = "#000000", bg = "#ffffff", bold = true }
+inactive = { fg = "#8c8c8c", bg = "#1c1c1c" }
+
+[mode]
+normal_main = { fg = "#000000", bg = "#ffffff", bold = true }
+normal_alt  = { fg = "#ffffff", bg = "#1c1c1c" }
+select_main = { fg = "#000000", bg = "#e6e6e6", bold = true }
+select_alt  = { fg = "#e6e6e6", bg = "#1c1c1c" }
+unset_main  = { fg = "#000000", bg = "#8c8c8c", bold = true }
+unset_alt   = { fg = "#8c8c8c", bg = "#1c1c1c" }
+
+[status]
+perm_type       = { fg = "#ffffff" }
+perm_read       = { fg = "#e6e6e6" }
+perm_write      = { fg = "#b3b3b3" }
+perm_exec       = { fg = "#bfbfbf" }
+perm_sep        = { fg = "#4a4a4a" }
+progress_label  = { fg = "#ffffff", bold = true }
+progress_normal = { fg = "#ffffff", bg = "#303030" }
+progress_error  = { fg = "#ffffff", bg = "#6e6e6e" }
+
+[which]
+mask            = { bg = "#0a0a0a" }
+cand            = { fg = "#ffffff" }
+rest            = { fg = "#6e6e6e" }
+desc            = { fg = "#e6e6e6" }
+separator_style = { fg = "#4a4a4a" }
+
+[confirm]
+border  = { fg = "#ffffff" }
+title   = { fg = "#ffffff", bold = true }
+btn_yes = { fg = "#000000", bg = "#ffffff", bold = true }
+btn_no  = { fg = "#e6e6e6" }
+
+[spot]
+border   = { fg = "#ffffff" }
+title    = { fg = "#ffffff", bold = true }
+tbl_col  = { fg = "#ffffff" }
+tbl_cell = { fg = "#000000", bg = "#ffffff" }
+
+[notify]
+title_info  = { fg = "#e6e6e6", bold = true }
+title_warn  = { fg = "#ffffff", bold = true }
+title_error = { fg = "#ffffff", bold = true, underline = true }
+
+[pick]
+border   = { fg = "#ffffff" }
+active   = { fg = "#000000", bg = "#ffffff" }
+inactive = { fg = "#e6e6e6" }
+
+[input]
+border   = { fg = "#ffffff" }
+title    = { fg = "#e6e6e6" }
+value    = { fg = "#ffffff" }
+selected = { fg = "#000000", bg = "#ffffff" }
+
+[cmp]
+border   = { fg = "#ffffff" }
+active   = { fg = "#000000", bg = "#ffffff" }
+inactive = { fg = "#e6e6e6" }
+
+[tasks]
+border  = { fg = "#ffffff" }
+title   = { fg = "#e6e6e6" }
+hovered = { fg = "#000000", bg = "#ffffff" }
+
+[help]
+border  = { fg = "#ffffff" }
+chord   = { fg = "#ffffff" }
+action  = { fg = "#8c8c8c" }
+hovered = { fg = "#000000", bg = "#ffffff" }
+
+[filetype]
+rules = [
+  { url = "*/", fg = "#ffffff", bold = true },                       # folders
+  { url = "*", is = "orphan", fg = "#6e6e6e", italic = true },    # links that point nowhere
+  { url = "*", is = "link", fg = "#b3b3b3", italic = true },
+  { url = "*", is = "exec", fg = "#ffffff", bold = true },
+  { mime = "image/*", fg = "#d9d9d9" },
+  { mime = "{audio,video}/*", fg = "#bfbfbf" },
+  { mime = "application/{zip,rar,7z*,tar,gzip,xz,zstd,bzip*,lzma,compress,archive,cpio,arj,xar,ms-cab*}", fg = "#a6a6a6" },
+  { url = "*", fg = "#e6e6e6" },
+]

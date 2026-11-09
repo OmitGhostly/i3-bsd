@@ -1,0 +1,454 @@
+# =============================================================================
+#  i3 config - port of KooL Hyprland-Dots (LinuxBeginnings) | GPL-3.0-or-later
+#  Requires i3 >= 4.22 (built-in gaps). Lines starting with "## " are the
+#  descriptions shown by SUPER+H / SUPER+SHIFT+K (KeyHints.sh). Keys can be changed in
+#  the settings window (SUPER+ALT+M, Keybindings tab), which edits the bindsym lines below.
+# =============================================================================
+
+set $mod Mod4
+set $alt Mod1
+set $scripts ~/.config/i3/scripts
+set $rofi_cfg ~/.config/i3/rofi/config.rasi
+
+font pango:FantasqueSansM Nerd Font Mono 10
+floating_modifier $mod
+focus_follows_mouse yes
+default_orientation horizontal
+workspace_layout default
+# new windows never open as tabs; with spiral tiling on (AutoTiling.py) they split the focused window like Hyprland
+
+# ---- look: monochrome (starterpack-style gaps/borders, black & white) -----------
+# every window, tiled or floating, gets the same border: the focused one is drawn in the accent colour (the "ring")
+default_border pixel 3
+default_floating_border pixel 3
+title_align center
+# (no "hide_edge_borders": even a window that is alone on the screen keeps its ring, so every app shows it)
+hide_edge_borders none
+gaps inner 5
+gaps outer 0
+# lone window: no gaps either
+smart_gaps on
+
+# workspace names: numbers keep the keybinds, roman numerals are what the bar shows
+set $ws1  "1:I"
+set $ws2  "2:II"
+set $ws3  "3:III"
+set $ws4  "4:IV"
+set $ws5  "5:V"
+set $ws6  "6:VI"
+set $ws7  "7:VII"
+set $ws8  "8:VIII"
+set $ws9  "9:IX"
+set $ws10 "10:X"
+
+set $black #000000
+set $dark  #1c1c1c
+set $line  #303030
+set $grey  #8c8c8c
+set $white #ffffff
+# the accent colour (white = monochrome). The Settings window's Colors tab changes this line.
+set $accent #ffffff
+#                       border  background text    indicator child_border
+client.focused          $accent $accent    $black  $accent   $accent
+client.focused_inactive $line   $dark      $grey   $line     $line
+client.unfocused        $line   $black     $grey   $line     $line
+client.urgent           $grey   $grey      $black  $grey     $grey
+client.placeholder      $black  $black     $grey   $black    $black
+client.background       $black
+
+# ---- apps / launchers -------------------------------------------------------
+## app launcher (rofi)
+bindsym $mod+d exec --no-startup-id "pkill rofi || rofi -show drun -modi drun,filebrowser,run,window -config $rofi_cfg"
+## open terminal
+bindsym $mod+Return exec --no-startup-id $scripts/LaunchTerminal.sh
+## file manager
+bindsym $mod+e exec --no-startup-id $scripts/LaunchFileManager.sh
+## open default browser
+bindsym $mod+b exec --no-startup-id $scripts/LaunchBrowser.sh
+## SSH session manager
+bindsym $mod+c exec --no-startup-id $scripts/rofi-ssh-menu.sh
+## help / cheat sheet
+bindsym $mod+h exec --no-startup-id $scripts/KeyHints.sh
+## search keybinds
+bindsym $mod+Shift+k exec --no-startup-id $scripts/KeyBinds.sh
+## web search
+bindsym $mod+s exec --no-startup-id $scripts/RofiSearch.sh
+## window switcher (overview replacement)
+bindsym $mod+a exec --no-startup-id pkill rofi || rofi -show window -config $rofi_cfg
+## window switcher
+bindsym $mod+Ctrl+s exec --no-startup-id pkill rofi || rofi -show window -config $rofi_cfg
+## emoji menu
+bindsym $mod+$alt+e exec --no-startup-id $scripts/RofiEmoji.sh
+## calculator
+bindsym $mod+$alt+c exec --no-startup-id $scripts/RofiCalc.sh
+## clipboard manager
+bindsym $mod+$alt+v exec --no-startup-id $scripts/ClipManager.sh
+## online music
+bindsym $mod+Shift+m exec --no-startup-id $scripts/RofiBeats.sh
+## quick settings menu
+bindsym $mod+Shift+e exec --no-startup-id $scripts/QuickSettings.sh
+## rofi theme selector
+bindsym $mod+Ctrl+r exec --no-startup-id $scripts/RofiThemeSelector.sh
+## rofi theme selector (modified)
+bindsym $mod+Ctrl+Shift+r exec --no-startup-id "pkill rofi; $scripts/RofiThemeSelector-modified.sh"
+## kitty theme selector
+bindsym $mod+Ctrl+k exec --no-startup-id $scripts/Kitty_themes.sh
+## change oh-my-zsh theme
+bindsym $mod+Shift+o exec --no-startup-id $scripts/ZshChangeTheme.sh
+## refresh bar, colors, menus
+bindsym $mod+$alt+r exec --no-startup-id $scripts/Refresh.sh
+## drop-down terminal
+bindsym $mod+Shift+Return exec --no-startup-id $scripts/Dropterminal.sh
+## display layout tool (arandr)
+bindsym $mod+$alt+d exec --no-startup-id arandr
+
+## settings window (network: Wi-Fi, Ethernet, IP and DNS, VPN, proxy; Bluetooth, sound, displays, appearance, colors, themes, mouse and cursor, keybinds)
+bindsym $mod+$alt+m exec --no-startup-id $scripts/SettingsGUI.py
+
+# ---- wallpaper / look toggles -------------------------------------------------
+## select wallpaper
+bindsym $mod+w exec --no-startup-id $scripts/WallpaperSelect.sh
+## random wallpaper
+bindsym Ctrl+$alt+w exec --no-startup-id $scripts/WallpaperRandom.sh
+## toggle compositor (blur/rounding/shadows)
+bindsym $mod+$alt+o exec --no-startup-id $scripts/Compositor.sh
+## toggle active window opacity
+bindsym $mod+Ctrl+o exec --no-startup-id $scripts/ToggleOpacity.sh
+## toggle game mode
+bindsym $mod+Shift+g exec --no-startup-id $scripts/GameMode.sh
+## toggle night light
+bindsym $mod+n exec --no-startup-id $scripts/Nightlight.sh toggle
+## toggle bar on/off
+bindsym $mod+Ctrl+$alt+b exec --no-startup-id polybar-msg cmd toggle
+## notification history
+bindsym $mod+Shift+n exec --no-startup-id dunstctl history-pop
+
+# ---- session ------------------------------------------------------------------
+## close active window
+bindsym $mod+q kill
+## terminate active process
+bindsym $mod+Shift+q exec --no-startup-id $scripts/KillActiveProcess.sh
+## lock screen
+bindsym Ctrl+$alt+l exec --no-startup-id $scripts/LockScreen.sh
+## power menu
+bindsym Ctrl+$alt+p exec --no-startup-id $scripts/Powermenu.sh
+## exit / power menu
+bindsym Ctrl+$alt+Delete exec --no-startup-id $scripts/Powermenu.sh
+## reload i3 config
+bindsym $mod+Shift+c reload
+## restart i3 in place
+bindsym $mod+Shift+r restart
+
+# ---- screenshots (maim) -------------------------------------------------------
+## screenshot now
+bindsym $mod+Print exec --no-startup-id $scripts/ScreenShot.sh --now
+## screenshot (area)
+bindsym $mod+Shift+Print exec --no-startup-id $scripts/ScreenShot.sh --area
+## screenshot in 5s
+bindsym $mod+Ctrl+Print exec --no-startup-id $scripts/ScreenShot.sh --in5
+## screenshot in 10s
+bindsym $mod+Ctrl+Shift+Print exec --no-startup-id $scripts/ScreenShot.sh --in10
+## screenshot active window
+bindsym $alt+Print exec --no-startup-id $scripts/ScreenShot.sh --active
+## screenshot + annotate
+bindsym $mod+Shift+s exec --no-startup-id $scripts/ScreenShot.sh --swappy
+## screenshot now (F6)
+bindsym $mod+F6 exec --no-startup-id $scripts/ScreenShot.sh --now
+## screenshot area (F6)
+bindsym $mod+Shift+F6 exec --no-startup-id $scripts/ScreenShot.sh --area
+## screenshot in 5s (F6)
+bindsym $mod+Ctrl+F6 exec --no-startup-id $scripts/ScreenShot.sh --in5
+## screenshot in 10s (F6)
+bindsym $mod+$alt+F6 exec --no-startup-id $scripts/ScreenShot.sh --in10
+## screenshot active window (F6)
+bindsym $alt+F6 exec --no-startup-id $scripts/ScreenShot.sh --active
+## region screenshot
+bindsym $alt+Shift+s exec --no-startup-id $scripts/ScreenShot.sh --area
+
+# ---- window / layout ----------------------------------------------------------
+## fullscreen
+bindsym $mod+Shift+f fullscreen toggle
+## fullscreen (maximize)
+bindsym $mod+f fullscreen toggle
+## toggle floating
+bindsym $mod+space floating toggle
+## floating: standard size, centered
+bindsym $mod+Ctrl+space floating enable, resize set 1100 650, move position center
+## toggle layout (split/tabbed/stacking)
+bindsym $mod+$alt+l layout toggle all
+## layout: side by side (the normal split layout)
+bindsym $mod+$alt+1 layout splith
+## layout: stacking
+bindsym $mod+$alt+2 layout stacking
+## layout: tabbed (monocle-like)
+bindsym $mod+$alt+3 layout tabbed
+## toggle group (tabbed/split)
+bindsym $mod+g layout toggle tabbed split
+## toggle split direction
+bindsym $mod+Shift+i layout toggle split
+## toggle spiral tiling like Hyprland (on) / classic side by side (off)
+bindsym $mod+$alt+t exec --no-startup-id $scripts/AutoTiling.py --toggle
+## focus parent container (group)
+bindsym $mod+Ctrl+h focus parent
+## focus child container
+bindsym $mod+Ctrl+j focus child
+## split next window horizontally
+bindsym $mod+backslash split h
+## split next window vertically
+bindsym $mod+minus split v
+## toggle sticky
+bindsym $mod+Shift+t sticky toggle
+## focus: switch tiling/floating
+bindsym $mod+Shift+space focus mode_toggle
+## focus next
+bindsym $mod+j focus right
+## focus previous
+bindsym $mod+k focus left
+## focus next (alt-tab)
+bindsym $alt+Tab focus right
+## focus previous (alt-shift-tab)
+bindsym $alt+Shift+Tab focus left
+## focus left
+bindsym $mod+Left focus left
+## focus down
+bindsym $mod+Down focus down
+## focus up
+bindsym $mod+Up focus up
+## focus right
+bindsym $mod+Right focus right
+## move window left
+bindsym $mod+Ctrl+Left move left
+## move window down
+bindsym $mod+Ctrl+Down move down
+## move window up
+bindsym $mod+Ctrl+Up move up
+## move window right
+bindsym $mod+Ctrl+Right move right
+## resize: narrower
+bindsym $mod+Shift+Left resize shrink width 50 px or 5 ppt
+## resize: wider
+bindsym $mod+Shift+Right resize grow width 50 px or 5 ppt
+## resize: shorter
+bindsym $mod+Shift+Up resize shrink height 50 px or 5 ppt
+## resize: taller
+bindsym $mod+Shift+Down resize grow height 50 px or 5 ppt
+## move to scratchpad (special workspace)
+bindsym $mod+Shift+u move scratchpad
+## toggle scratchpad (special workspace)
+bindsym $mod+u scratchpad show
+
+# ---- workspaces ---------------------------------------------------------------
+## workspace 1
+bindsym $mod+1 workspace number $ws1
+## workspace 2
+bindsym $mod+2 workspace number $ws2
+## workspace 3
+bindsym $mod+3 workspace number $ws3
+## workspace 4
+bindsym $mod+4 workspace number $ws4
+## workspace 5
+bindsym $mod+5 workspace number $ws5
+## workspace 6
+bindsym $mod+6 workspace number $ws6
+## workspace 7
+bindsym $mod+7 workspace number $ws7
+## workspace 8
+bindsym $mod+8 workspace number $ws8
+## workspace 9
+bindsym $mod+9 workspace number $ws9
+## workspace 10
+bindsym $mod+0 workspace number $ws10
+## move to workspace 1 (follow)
+bindsym $mod+Shift+1 exec --no-startup-id $scripts/Workspace.py move $ws1 follow
+## move to workspace 2 (follow)
+bindsym $mod+Shift+2 exec --no-startup-id $scripts/Workspace.py move $ws2 follow
+## move to workspace 3 (follow)
+bindsym $mod+Shift+3 exec --no-startup-id $scripts/Workspace.py move $ws3 follow
+## move to workspace 4 (follow)
+bindsym $mod+Shift+4 exec --no-startup-id $scripts/Workspace.py move $ws4 follow
+## move to workspace 5 (follow)
+bindsym $mod+Shift+5 exec --no-startup-id $scripts/Workspace.py move $ws5 follow
+## move to workspace 6 (follow)
+bindsym $mod+Shift+6 exec --no-startup-id $scripts/Workspace.py move $ws6 follow
+## move to workspace 7 (follow)
+bindsym $mod+Shift+7 exec --no-startup-id $scripts/Workspace.py move $ws7 follow
+## move to workspace 8 (follow)
+bindsym $mod+Shift+8 exec --no-startup-id $scripts/Workspace.py move $ws8 follow
+## move to workspace 9 (follow)
+bindsym $mod+Shift+9 exec --no-startup-id $scripts/Workspace.py move $ws9 follow
+## move to workspace 10 (follow)
+bindsym $mod+Shift+0 exec --no-startup-id $scripts/Workspace.py move $ws10 follow
+## move silently to workspace 1
+bindsym $mod+Ctrl+1 exec --no-startup-id $scripts/Workspace.py move $ws1
+## move silently to workspace 2
+bindsym $mod+Ctrl+2 exec --no-startup-id $scripts/Workspace.py move $ws2
+## move silently to workspace 3
+bindsym $mod+Ctrl+3 exec --no-startup-id $scripts/Workspace.py move $ws3
+## move silently to workspace 4
+bindsym $mod+Ctrl+4 exec --no-startup-id $scripts/Workspace.py move $ws4
+## move silently to workspace 5
+bindsym $mod+Ctrl+5 exec --no-startup-id $scripts/Workspace.py move $ws5
+## move silently to workspace 6
+bindsym $mod+Ctrl+6 exec --no-startup-id $scripts/Workspace.py move $ws6
+## move silently to workspace 7
+bindsym $mod+Ctrl+7 exec --no-startup-id $scripts/Workspace.py move $ws7
+## move silently to workspace 8
+bindsym $mod+Ctrl+8 exec --no-startup-id $scripts/Workspace.py move $ws8
+## move silently to workspace 9
+bindsym $mod+Ctrl+9 exec --no-startup-id $scripts/Workspace.py move $ws9
+## move silently to workspace 10
+bindsym $mod+Ctrl+0 exec --no-startup-id $scripts/Workspace.py move $ws10
+## next workspace
+bindsym $mod+Tab workspace next_on_output
+## previous workspace
+bindsym $mod+Shift+Tab workspace prev_on_output
+## next workspace (.)
+bindsym $mod+period workspace next_on_output
+## previous workspace (,)
+bindsym $mod+comma workspace prev_on_output
+## next workspace (scroll)
+bindsym --whole-window $mod+button5 workspace next_on_output
+## previous workspace (scroll)
+bindsym --whole-window $mod+button4 workspace prev_on_output
+## move to next workspace (follow)
+bindsym $mod+Shift+bracketright exec --no-startup-id $scripts/Workspace.py move next follow
+## move to previous workspace (follow)
+bindsym $mod+Shift+bracketleft exec --no-startup-id $scripts/Workspace.py move prev follow
+## move silently to next workspace
+bindsym $mod+Ctrl+bracketright exec --no-startup-id $scripts/Workspace.py move next
+## move silently to previous workspace
+bindsym $mod+Ctrl+bracketleft exec --no-startup-id $scripts/Workspace.py move prev
+## workspace to left monitor
+bindsym $mod+Ctrl+F9 move workspace to output left
+## workspace to right monitor
+bindsym $mod+Ctrl+F10 move workspace to output right
+## workspace to upper monitor
+bindsym $mod+Ctrl+F11 move workspace to output up
+## workspace to lower monitor
+bindsym $mod+Ctrl+F12 move workspace to output down
+
+# ---- media / hardware keys (holding a key repeats) ---------------------------
+## volume up
+bindsym XF86AudioRaiseVolume exec --no-startup-id $scripts/Volume.sh --inc
+## volume down
+bindsym XF86AudioLowerVolume exec --no-startup-id $scripts/Volume.sh --dec
+## volume up (precise)
+bindsym $alt+XF86AudioRaiseVolume exec --no-startup-id $scripts/Volume.sh --inc-precise
+## volume down (precise)
+bindsym $alt+XF86AudioLowerVolume exec --no-startup-id $scripts/Volume.sh --dec-precise
+## toggle mute
+bindsym XF86AudioMute exec --no-startup-id $scripts/Volume.sh --toggle
+## toggle mic mute
+bindsym XF86AudioMicMute exec --no-startup-id $scripts/Volume.sh --toggle-mic
+## play/pause
+bindsym XF86AudioPlay exec --no-startup-id $scripts/MediaCtrl.sh --pause
+## pause
+bindsym XF86AudioPause exec --no-startup-id $scripts/MediaCtrl.sh --pause
+## next track
+bindsym XF86AudioNext exec --no-startup-id $scripts/MediaCtrl.sh --nxt
+## previous track
+bindsym XF86AudioPrev exec --no-startup-id $scripts/MediaCtrl.sh --prv
+## stop
+bindsym XF86AudioStop exec --no-startup-id $scripts/MediaCtrl.sh --stop
+## brightness up
+bindsym XF86MonBrightnessUp exec --no-startup-id $scripts/Brightness.sh --inc
+## brightness down
+bindsym XF86MonBrightnessDown exec --no-startup-id $scripts/Brightness.sh --dec
+## brightness up (kbd)
+bindsym Ctrl+$alt+equal exec --no-startup-id $scripts/Brightness.sh --inc
+## brightness down (kbd)
+bindsym Ctrl+$alt+minus exec --no-startup-id $scripts/Brightness.sh --dec
+## brightness up (numpad)
+bindsym Ctrl+$alt+KP_Add exec --no-startup-id $scripts/Brightness.sh --inc
+## brightness down (numpad)
+bindsym Ctrl+$alt+KP_Subtract exec --no-startup-id $scripts/Brightness.sh --dec
+## keyboard backlight up
+bindsym XF86KbdBrightnessUp exec --no-startup-id $scripts/BrightnessKbd.sh --inc
+## keyboard backlight down
+bindsym XF86KbdBrightnessDown exec --no-startup-id $scripts/BrightnessKbd.sh --dec
+## keyboard backlight cycle
+bindsym XF86KbdLightOnOff exec --no-startup-id $scripts/BrightnessKbd.sh --cycle
+## toggle touchpad
+bindsym XF86TouchpadToggle exec --no-startup-id $scripts/TouchPad.sh
+## airplane mode
+bindsym XF86WLAN exec --no-startup-id $scripts/AirplaneMode.sh
+## airplane mode (rfkill key)
+bindsym XF86RFKill exec --no-startup-id $scripts/AirplaneMode.sh
+## sleep
+bindsym XF86Sleep exec --no-startup-id $scripts/Platform.sh power suspend
+
+# ---- window rules (ported from lua/window_rules.lua) -------------------------
+# Apps that draw their own title bar (Firefox, Chrome, VS Code, Discord, Spotify, GNOME apps...) ask for no border,
+# so i3 would skip the focus ring on them. Give every window the border; the rules below can still change it.
+# (Some ask again after they have opened; AutoTiling.py puts the border back then. To hide a window's border on
+# purpose, use "border pixel 0" like the mpv rule below - "border none" would be undone.)
+for_window [all] border pixel 3
+for_window [window_role="(pop-up|dialog|task_dialog|About)"] floating enable
+for_window [window_type="dialog"] floating enable
+for_window [window_type="utility"] floating enable
+for_window [window_type="splash"] floating enable
+for_window [class="(?i)^(zoom|onedriver|onedriver-launcher)$"] floating enable
+for_window [class="^(mpv|com.github.rafostar.Clapper)$"] floating enable
+for_window [class="(?i)^(qalculate-gtk|org.gnome.Calculator)$"] floating enable, resize set 600 500, move position center
+for_window [title="^(Authentication [Rr]equired)$"] floating enable, move position center
+for_window [class="(?i)^(xfce-polkit|mate-polkit|polkit-mate-authentication-agent-1|polkit-gnome-authentication-agent-1|lxpolkit)$"] floating enable, move position center
+for_window [title="^(Add Folder to Workspace|Save As|Open Files)$"] floating enable, resize set 70 ppt 60 ppt, move position center
+for_window [class="^yad$"] floating enable, move position center
+# the screenshot editor (SUPER+Shift+S): floating at the size it picks (the snip at 1:1, or shrunk to fit), centered -
+# tiled, it would be stretched to whatever shape the tile has
+for_window [class="(?i)^swappy$"] floating enable, move position center
+for_window [class="(?i)^(pavucontrol|org.pulseaudio.pavucontrol|com.saivert.pwvucontrol)$"] floating enable, resize set 900 600, move position center
+for_window [class="(?i)^nm-connection-editor$"] floating enable, move position center
+for_window [class="(?i)^nm-applet$"] floating enable, move position center
+for_window [class="(?i)^(nwg-look|nwg-displays|arandr|blueman-manager)$"] floating enable, move position center
+for_window [instance="^i3dots-settings$" window_type="normal"] floating enable, move position center
+for_window [class="(?i)^(nvidia-settings|org.kde.kwalletmanager|bitwarden|com.github.wwmm.easyeffects|io.github.amit9838.mousam|nz.co.mega.megasync|wihotspot|wihotspot-gui|ferdium)$"] floating enable, move position center
+for_window [class="(?i)^(whatsapp-for-linux|zapzap|com.rtosta.zapzap)$"] move position center
+for_window [title="^(KooL Quick Cheat Sheet|Keybindings|ROG Control)$"] floating enable, move position center
+for_window [class="(?i)^steam$" title="^(?!Steam$).+"] floating enable
+for_window [title="^[Pp]icture-in-[Pp]icture$"] floating enable, sticky enable, resize set 480 270
+for_window [class="^com\.i3dots\.dropterm$"] floating enable, resize set 1200 600, move position center, move scratchpad, scratchpad show
+for_window [class="^kitty-dropterm$"] floating enable, resize set 1200 600, move position center, move scratchpad, scratchpad show
+for_window [class="^(gamescope|steam_app_.*)$"] fullscreen enable
+for_window [class="^(mpv|vlc)$"] border pixel 0
+
+# ---- autostart (ported from lua/startup.lua) --------------------------------------
+# background services (the config updater, notifications) need to know the display: the D-Bus session i3 runs in
+exec --no-startup-id sh -c 'dbus-update-activation-environment DISPLAY XAUTHORITY 2>/dev/null'
+exec --no-startup-id ~/.config/i3/scripts/Input.sh
+exec --no-startup-id ~/.config/i3/scripts/Polkit.sh
+exec --no-startup-id ~/.config/i3/scripts/Picom.sh
+exec --no-startup-id dunst
+exec --no-startup-id ~/.config/i3/scripts/Wallpaper.sh --restore
+# FreeBSD / GhostBSD: NetworkMgr's tray icon, which joins Wi-Fi networks (exec_always: it only starts once)
+exec_always --no-startup-id ~/.config/i3/scripts/NetApplet.sh
+# the cursor you picked in Settings > Mouse, also for GTK / Flatpak apps (xsettingsd; exec_always: starts once)
+exec_always --no-startup-id ~/.config/i3/scripts/XSettings.sh
+exec --no-startup-id xss-lock --transfer-sleep-lock -- ~/.config/i3/scripts/LockScreen.sh
+exec --no-startup-id ~/.config/i3/scripts/ClipDaemon.sh
+# saved mouse / monitor settings (written by the settings window), then re-draw the bar for the new layout
+# (the wallpaper is drawn again once the screens are set up, so two monitors never get a misaligned picture)
+exec --no-startup-id sh -c '~/.config/i3/scripts/SettingsGUI.py --apply; ~/.config/i3/scripts/Wallpaper.sh --restore; sleep 1; ~/.config/polybar/launch.sh'
+exec --no-startup-id ~/.config/i3/scripts/Nightlight.sh init
+# game mode never survives a logout (its gaps/compositor changes are gone too)
+exec --no-startup-id rm -f ~/.cache/i3/gamemode
+exec --no-startup-id ~/.config/i3/scripts/first-run.sh
+# packages changed while you were logged out: check GitHub for a newer desktop config (a notification;
+# installing it is up to you: i3dots-update)
+exec --no-startup-id ~/.config/i3/scripts/Update.sh --login
+# re-launched on every reload so the bar picks up new colors / monitors
+exec_always --no-startup-id ~/.config/polybar/launch.sh
+# i3's own bar instead, only where polybar is not installed (NetBSD has no package of it): launch.sh writes it here
+include ~/.config/i3/bar-fallback.conf
+# Hyprland-style spiral tiling (new windows split the focused one along its longer side). Only one copy runs;
+# it follows i3 through restarts. Mode: SUPER+ALT+T or Settings > Appearance > Window tiling.
+exec_always --no-startup-id ~/.config/i3/scripts/AutoTiling.py
+# touchpad: swipe with three fingers to go to the next / previous workspace (Touchégg - where it is installed)
+exec_always --no-startup-id ~/.config/i3/scripts/Gestures.sh
+# a mouse or touchpad plugged in later (or a Bluetooth mouse reconnecting) gets your Settings > Mouse choices too
+exec_always --no-startup-id ~/.config/i3/scripts/InputWatch.py
+
+# ---- used by the settings window while it records a new key (leaves with XF86Launch9) ----
+mode "keycapture" {
+    bindsym XF86Launch9 mode "default"
+}

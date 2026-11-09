@@ -1,0 +1,31 @@
+/* ---- 💫 https://github.com/LinuxBeginnings 💫 ---- */
+/* Rofi Config for Google Search) */
+
+@import "~/.config/i3/rofi/config.rasi"  
+
+/* ---- Window ---- */
+window {
+	width: 40%;
+	//orientation: horizontal;
+	height: inherit;
+    y-offset: 10px;
+    location: north;
+    anchor: north;   /* (most themes anchor the window by its center, which put half of it above the screen) */
+    children: [ "entry", "message", "listview" ];   /* (listview stays in the layout, hidden below: rofi 1.7 crashes without one) */
+    border: 2px;
+    border-color: white/25%;
+}
+
+/* ---- Entry ---- */ 
+entry {
+	expand: true;
+	placeholder: " 🔎 Google Search";
+	horizontal-align: 0.5;
+	padding: 15px;
+	border-radius: inherit;
+}
+
+/* ---- Listview (no list, only the text box) ---- */
+listview {
+	enabled: false;
+}

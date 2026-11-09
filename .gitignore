@@ -1,0 +1,7 @@
+*.bak-*
+*.swp
+*~
+.DS_Store
+# Python caches (the settings window and scripts are run from the repo while testing)
+__pycache__/
+*.pyc

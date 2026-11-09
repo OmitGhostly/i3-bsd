@@ -1,0 +1,45 @@
+/* Palette: black / greys + one accent colour. Written by the Settings window (Colors tab); safe to hand-edit. */
+* {
+active-background: #1c1c1c;
+active-foreground: #ffffff;
+normal-background: #000000;
+normal-foreground: #e6e6e6;
+urgent-background: #ffffff;
+urgent-foreground: #000000;
+
+alternate-active-background: #1c1c1c;
+alternate-active-foreground: #ffffff;
+alternate-normal-background: #0a0a0a;
+alternate-normal-foreground: #e6e6e6;
+alternate-urgent-background: #ffffff;
+alternate-urgent-foreground: #000000;
+
+selected-active-background: #ffffff;
+selected-active-foreground: #000000;
+selected-normal-background: #ffffff;
+selected-normal-foreground: #000000;
+selected-urgent-background: #bfbfbf;
+selected-urgent-foreground: #000000;
+
+background-color: #000000;
+background: rgba(0,0,0,0.92);
+foreground: #e6e6e6;
+border-color: #ffffff;
+
+color0: #000000;
+color1: #1c1c1c;
+color2: #303030;
+color3: #4a4a4a;
+color4: #6e6e6e;
+color5: #8c8c8c;
+color6: #bfbfbf;
+color7: #e6e6e6;
+color8: #8c8c8c;
+color9: #ffffff;
+color10: #bfbfbf;
+color11: #e6e6e6;
+color12: #ffffff;
+color13: #d9d9d9;
+color14: #f2f2f2;
+color15: #ffffff;
+}

@@ -1,0 +1,24 @@
+# Monochrome, made for reading. Black background and white text; the prompt blocks (palette 1-6) are light greys,
+# and the Ghostty config's minimum-contrast makes any text that would be faint on them (or anywhere) black or white.
+palette = 0=#000000
+palette = 1=#b4b4b4
+palette = 2=#bcbcbc
+palette = 3=#c8c8c8
+palette = 4=#aaaaaa
+palette = 5=#c0c0c0
+palette = 6=#b8b8b8
+palette = 7=#d8d8d8
+palette = 8=#8a8a8a
+palette = 9=#cfcfcf
+palette = 10=#d8d8d8
+palette = 11=#e4e4e4
+palette = 12=#dcdcdc
+palette = 13=#d0d0d0
+palette = 14=#e0e0e0
+palette = 15=#ffffff
+background = #000000
+foreground = #f0f0f0
+cursor-color = #ffffff
+cursor-text = #000000
+selection-background = #ffffff
+selection-foreground = #000000

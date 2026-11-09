@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+# ==================================================
+#  KoolDots (2026)
+#  Project URL: https://github.com/LinuxBeginnings
+#  License: GNU GPLv3
+#  SPDX-License-Identifier: GPL-3.0-or-later
+# ==================================================
+# Rofi Themes - Script to preview and apply themes by live-reloading the config.
+# only one copy of this picker at a time (two would edit the same config file at once)
+# shellcheck disable=SC1091
+. "${XDG_CONFIG_HOME:-$HOME/.config}/i3/scripts/compat.sh"   # flock, setsid, sed_inplace, pick_random everywhere
+exec 9>"${XDG_RUNTIME_DIR:-/tmp}/i3dots-$(id -u)-$(basename "$0").lock"
+flock -n 9 || exit 0
+
+# --- Configuration ---
+ROFI_THEMES_DIR_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/i3/rofi/themes"
+ROFI_THEMES_DIR_LOCAL="$HOME/.local/share/rofi/themes"
+ROFI_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/i3/rofi/config.rasi"
+ROFI_THEME_FOR_THIS_SCRIPT="${XDG_CONFIG_HOME:-$HOME/.config}/i3/rofi/config-rofi-theme.rasi" # A separate rofi theme for the picker itself
+IDIR="${XDG_CONFIG_HOME:-$HOME/.config}/i3/images"                                     # For notifications
+# Same indicator the other selection menus use. Never part of a theme name.
+MARKER="👉"
+
+# --- Helper Functions ---
+
+# Function to send a notification
+notify_user() {
+  notify-send -u low -i "$1" "$2" "$3"
+}
+
+# Function to apply the selected rofi theme to the main config file
+apply_rofi_theme_to_config() {
+  local theme_name_to_apply="$1"
+
+  # Find the full path of the theme file
+  local theme_path
+  if [[ -f "$ROFI_THEMES_DIR_CONFIG/$theme_name_to_apply" ]]; then
+    theme_path="$ROFI_THEMES_DIR_CONFIG/$theme_name_to_apply"
+  elif [[ -f "$ROFI_THEMES_DIR_LOCAL/$theme_name_to_apply" ]]; then
+    theme_path="$ROFI_THEMES_DIR_LOCAL/$theme_name_to_apply"
+  else
+    notify_user "$IDIR/error.png" "Error" "Theme file not found: $theme_name_to_apply"
+    return 1
+  fi
+
+  # Use ~ for the home directory in the config path
+  local theme_path_with_tilde="~${theme_path#"$HOME"}"
+
+  # Create a temporary file to safely edit the config
+  local temp_rofi_config_file
+  temp_rofi_config_file=$(mktemp)
+  cp "$ROFI_CONFIG_FILE" "$temp_rofi_config_file"
+
+  # Comment out any existing @theme entry
+  sed_inplace -E 's|^([[:space:]]*@theme)|//\1|' "$temp_rofi_config_file"
+
+  # Add the new @theme entry at the end of the file
+  echo "@theme \"$theme_path_with_tilde\"" >>"$temp_rofi_config_file"
+
+  # Overwrite the original config file
+  cp "$temp_rofi_config_file" "$ROFI_CONFIG_FILE"
+  rm "$temp_rofi_config_file"
+
+  # Prune old commented-out theme lines to prevent clutter
+  local max_lines=10
+  local total_lines
+  total_lines=$(grep -cE '^[[:space:]]*//[[:space:]]*@theme' "$ROFI_CONFIG_FILE")
+  if [ "$total_lines" -gt "$max_lines" ]; then
+    local excess=$((total_lines - max_lines))
+    # drop the oldest ones (the first in the file)
+    awk -v n="$excess" '/^[[:space:]]*\/\/[[:space:]]*@theme/ && n > 0 { n--; next } { print }' "$ROFI_CONFIG_FILE" \
+      >"$ROFI_CONFIG_FILE.i3tmp" && cat "$ROFI_CONFIG_FILE.i3tmp" >"$ROFI_CONFIG_FILE"
+    rm -f "$ROFI_CONFIG_FILE.i3tmp"
+  fi
+
+  return 0
+}
+
+# --- Main Script Execution ---
+
+# Check for required directories and files
+if [ ! -d "$ROFI_THEMES_DIR_CONFIG" ] && [ ! -d "$ROFI_THEMES_DIR_LOCAL" ]; then
+  notify_user "$IDIR/error.png" "E-R-R-O-R" "No Rofi themes directory found."
+  exit 1
+fi
+
+if [ ! -f "$ROFI_CONFIG_FILE" ]; then
+  notify_user "$IDIR/error.png" "E-R-R-O-R" "Rofi config file not found: $ROFI_CONFIG_FILE"
+  exit 1
+fi
+
+# Backup the original config content
+original_rofi_config_content_backup=$(cat "$ROFI_CONFIG_FILE")
+
+# Generate a sorted list of available theme file names
+mapfile -t available_theme_names < <((
+  for f in "$ROFI_THEMES_DIR_CONFIG"/*.rasi "$ROFI_THEMES_DIR_LOCAL"/*.rasi; do [ -f "$f" ] && echo "${f##*/}"; done
+) | sort -u)
+
+if [ ${#available_theme_names[@]} -eq 0 ]; then
+  notify_user "$IDIR/error.png" "No Rofi Themes" "No .rasi files found in theme directories."
+  exit 1
+fi
+
+# Find the currently active theme to set as the initial selection
+current_selection_index=0
+current_active_theme_path=$(sed -n 's/^[[:space:]]*@theme[[:space:]]*"\([^"]*\)".*/\1/p' "$ROFI_CONFIG_FILE" | tail -n 1)
+if [ -n "$current_active_theme_path" ]; then
+  current_active_theme_name=$(basename "$current_active_theme_path")
+  for i in "${!available_theme_names[@]}"; do
+    if [[ "${available_theme_names[$i]}" == "$current_active_theme_name" ]]; then
+      current_selection_index=$i
+      break
+    fi
+  done
+fi
+
+# Main preview loop
+while true; do
+  theme_to_preview_now="${available_theme_names[$current_selection_index]}"
+
+  # Apply the theme for preview
+  if ! apply_rofi_theme_to_config "$theme_to_preview_now"; then
+    echo "$original_rofi_config_content_backup" >"$ROFI_CONFIG_FILE"
+    notify_user "$IDIR/error.png" "Preview Error" "Failed to apply $theme_to_preview_now. Reverted."
+    exit 1
+  fi
+
+  # One row per theme, with the marker on the theme that is live. The preview
+  # above already wrote it to the config, so the marked row moves with it.
+  current_theme_label="$(basename "${available_theme_names[$current_selection_index]}" .rasi)"
+  rofi_input_list=""
+  for i in "${!available_theme_names[@]}"; do
+    theme_label="$(basename "${available_theme_names[$i]}" .rasi)"
+    if [ "$i" -eq "$current_selection_index" ]; then
+      rofi_input_list+="$MARKER $theme_label"$'\n'
+    else
+      rofi_input_list+="$theme_label"$'\n'
+    fi
+  done
+  rofi_input_list_trimmed="${rofi_input_list%$'\n'}"
+
+  # Launch Rofi and get user's choice
+  "${XDG_CONFIG_HOME:-$HOME/.config}/i3/scripts/RofiFocusedWallpaperLink.sh" >/dev/null 2>&1 || true
+  chosen_index_from_rofi=$(printf '%s\n' "$rofi_input_list_trimmed" |
+    rofi -dmenu -i \
+      -format 'i' \
+      -p "Rofi Theme" \
+      -mesg "‼️ **note** ‼️ Current: $current_theme_label || Enter: Preview || Ctrl+S: Apply &amp; Exit || Esc: Cancel" \
+      -config "$ROFI_THEME_FOR_THIS_SCRIPT" \
+      -selected-row "$current_selection_index" \
+      -kb-custom-1 "Control+s")
+
+  rofi_exit_code=$?
+  # The menu is asked for an index; a marker that reaches the parse would make
+  # the choice look like no choice at all.
+  chosen_index_from_rofi="${chosen_index_from_rofi#"$MARKER "}"
+
+  # Handle Rofi's exit code
+  if [ $rofi_exit_code -eq 0 ]; then # Enter
+    if [[ "$chosen_index_from_rofi" =~ ^[0-9]+$ ]] && [ "$chosen_index_from_rofi" -lt "${#available_theme_names[@]}" ]; then
+      current_selection_index="$chosen_index_from_rofi"
+    fi
+  elif [ $rofi_exit_code -eq 1 ]; then # Escape
+    notify_user "$IDIR/note.png" "Rofi Theme" "Selection cancelled. Reverting to original theme."
+    echo "$original_rofi_config_content_backup" >"$ROFI_CONFIG_FILE"
+    break
+  elif [ $rofi_exit_code -eq 10 ]; then # Custom bind 1 (Ctrl+S)
+    notify_user "$IDIR/ja.png" "Rofi Theme Applied" "$(basename "$theme_to_preview_now" .rasi)"
+    break
+  else # Error or unexpected exit code
+    notify_user "$IDIR/error.png" "Rofi Error" "Unexpected Rofi exit ($rofi_exit_code). Reverting."
+    echo "$original_rofi_config_content_backup" >"$ROFI_CONFIG_FILE"
+    break
+  fi
+done
+
+exit 0
