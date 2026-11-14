@@ -418,7 +418,7 @@ exec --no-startup-id sh -c 'dbus-update-activation-environment DISPLAY XAUTHORIT
 exec --no-startup-id ~/.config/i3/scripts/Input.sh
 exec --no-startup-id ~/.config/i3/scripts/Polkit.sh
 exec --no-startup-id ~/.config/i3/scripts/Picom.sh
-exec --no-startup-id dunst
+exec --no-startup-id ~/.config/i3/scripts/Dunst.sh
 exec --no-startup-id ~/.config/i3/scripts/Wallpaper.sh --restore
 # FreeBSD / GhostBSD: NetworkMgr's tray icon, which joins Wi-Fi networks (exec_always: it only starts once)
 exec_always --no-startup-id ~/.config/i3/scripts/NetApplet.sh
@@ -427,8 +427,9 @@ exec_always --no-startup-id ~/.config/i3/scripts/XSettings.sh
 exec --no-startup-id xss-lock --transfer-sleep-lock -- ~/.config/i3/scripts/LockScreen.sh
 exec --no-startup-id ~/.config/i3/scripts/ClipDaemon.sh
 # saved mouse / monitor settings (written by the settings window), then re-draw the bar for the new layout
-# (the wallpaper is drawn again once the screens are set up, so two monitors never get a misaligned picture)
-exec --no-startup-id sh -c '~/.config/i3/scripts/SettingsGUI.py --apply; ~/.config/i3/scripts/Wallpaper.sh --restore; sleep 1; ~/.config/polybar/launch.sh'
+# (the wallpaper is drawn again once the screens are set up, so two monitors never get a misaligned picture; then
+# the wallpaper slideshow from Settings > Wallpaper starts, if it is on)
+exec --no-startup-id sh -c '~/.config/i3/scripts/SettingsGUI.py --apply; ~/.config/i3/scripts/Wallpaper.sh --restore; ~/.config/i3/scripts/WallCycle.sh --start; sleep 1; ~/.config/polybar/launch.sh'
 exec --no-startup-id ~/.config/i3/scripts/Nightlight.sh init
 # game mode never survives a logout (its gaps/compositor changes are gone too)
 exec --no-startup-id rm -f ~/.cache/i3/gamemode

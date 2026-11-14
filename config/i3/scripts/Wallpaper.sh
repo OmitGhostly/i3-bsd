@@ -5,7 +5,7 @@
 # some systems empty at boot - then a random picture used to come back). --restore puts it back: at login, after
 # the screens are set up (Settings > Displays), and whenever a screen is plugged in, unplugged or rearranged
 # (AutoTiling.py watches i3 for that), so it is drawn for the real layout and never ends up misaligned.
-# The same picture fills every monitor.
+# The same picture fills every monitor. Settings > Wallpaper can also change it every so often (WallCycle.sh).
 # shellcheck disable=SC1091
 . "${XDG_CONFIG_HOME:-$HOME/.config}/i3/scripts/compat.sh"   # flock, setsid, sed_inplace, pick_random everywhere
 WALL_DIR="${WALL_DIR:-$HOME/Pictures/wallpapers}"
@@ -30,6 +30,7 @@ set_wall() {
   f=$(readlink -f "$1") || exit 1
   [ -f "$f" ] || { notify-send "Wallpaper" "not found: $f"; exit 1; }
   printf '%s\n' "$f" >"$saved.tmp" && mv -f "$saved.tmp" "$saved"     # remember it (written whole, never half)
+  date +%s >"$state/wallcycle-last"      # (the slideshow, Settings > Wallpaper, waits its full time from now)
   draw "$f"
 }
 

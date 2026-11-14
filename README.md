@@ -1,8 +1,6 @@
 # i3 for BSD
 
-Monochrome i3 desktop for **FreeBSD, GhostBSD, OpenBSD and NetBSD**, with a Settings window (`SUPER + ALT + M`) for displays and brightness, network adapters and addresses, the proxy, the look and the keys. The cursor is [Capitaine Cursors](assets/cursors).
-
-Linux has its own version: [OmitGhostly/i3](https://github.com/OmitGhostly/i3).
+Monochrome i3 desktop for **FreeBSD, GhostBSD, OpenBSD and NetBSD**, with a Settings window (`SUPER + ALT + M`) for displays and brightness, power modes (power saver, balanced, performance), the wallpaper (and a wallpaper slideshow), network adapters and addresses, the proxy, the look (rounded corners, a 12- or 24-hour clock) and the keys. The cursor is [Capitaine Cursors](assets/cursors).
 
 ![desktop](docs/preview.png)
 
@@ -29,6 +27,8 @@ Afterwards, log out and pick **i3** at the login screen (GhostBSD: the session m
 
 Volume, brightness and battery use the system's own tools (`mixer`, `sndioctl`, `mixerctl`; `backlight`, `xbacklight`, `wsconsctl`; `acpi`, `apm`, `envstat`). NetBSD has no polybar package, so it uses i3's own bar. The Settings window shows your network adapters and addresses and sets the proxy; joining Wi-Fi, VPNs, sound and Bluetooth point to the system's own tools (FreeBSD and GhostBSD: NetworkMgr in the tray). Touchpad swipes need Touchégg, which only runs on Linux.
 
+Power modes (Settings > Power) use powerd on FreeBSD and GhostBSD and `hw.perfpolicy` on OpenBSD; changing them needs a doas or sudo rule that lets you run `sysrc` and `service` (FreeBSD) or `sysctl` (OpenBSD) without a password. NetBSD has no such setting.
+
 To shut down or sleep from the power menu, join the `operator` group (FreeBSD, NetBSD) or add a doas rule such as `permit nopass :wheel cmd shutdown`.
 
 The terminal is Ghostty where your system packages it, else kitty. The file manager is [yazi](https://yazi-rs.github.io) where it is packaged, opened in the terminal; Thunar stays installed, and Settings > Keybindings switches between them.
@@ -49,8 +49,6 @@ What you set in the Settings window is kept. Files you edited by hand in `~/.con
 | `i3dots-update --status` | the installed version, and a newer one if there is |
 | `i3dots-update --undo` | go back to the config from before the last update |
 | `i3dots-update --off` / `--on` | no more checks / checks again |
-
-Installed from [OmitGhostly/i3](https://github.com/OmitGhostly/i3) before the BSD version got its own repo? Your next `i3dots-update` moves you here by itself.
 
 ## Uninstall
 

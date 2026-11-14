@@ -26,22 +26,11 @@
 #
 #  Package managers: pkg (FreeBSD, GhostBSD), pkg_add (OpenBSD), pkgin (NetBSD).
 #  Anything else: install the programs yourself, then run with --no-packages.
-#  Linux has its own version of these dots: https://github.com/OmitGhostly/i3
 #  A log of every run is written to ~/.cache/i3wm-dots-install.log
 # =============================================================================
 set -uo pipefail
 
 REPO_URL="${I3DOTS_REPO:-https://github.com/OmitGhostly/i3-bsd.git}"
-# The BSD version used to live with the Linux one (OmitGhostly/i3, before that OmitGhostly/i3wm-config): an
-# address of those means this repo
-repo_moved() {
-  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
-    *github.com[:/]omitghostly/i3wm-config|*github.com[:/]omitghostly/i3wm-config.git|*github.com[:/]omitghostly/i3wm-config/ \
-    |*github.com[:/]omitghostly/i3|*github.com[:/]omitghostly/i3.git|*github.com[:/]omitghostly/i3/)
-      printf '%s\n' "https://github.com/OmitGhostly/i3-bsd.git" ;;
-    *) printf '%s\n' "$1" ;;
-  esac
-}
 here="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo /)"
 cfg="${XDG_CONFIG_HOME:-$HOME/.config}"
 stamp="$(date +%Y%m%d-%H%M%S)"
@@ -53,7 +42,7 @@ export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
 say()  { printf '\033[1;35m::\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31mxx\033[0m %s\n' "$*" >&2; exit 1; }
-usage() { sed -n '3,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 for arg in "$@"; do
   case "$arg" in
@@ -134,31 +123,8 @@ if [ "$FAMILY" = freebsd ]; then
       || grep -qi ghostbsd /etc/os-release /var/run/os-release 2>/dev/null; } && SYSNAME=GhostBSD
 fi
 
-# ---- Linux: its own version of these dots ----------------------------------------------------------------------
-# A Linux desktop whose updates came from here goes back to the Linux repo, and that repo's installer takes over
-# right away; a new install there is pointed to it.
-LINUX_REPO="${I3DOTS_LINUX_REPO:-https://github.com/OmitGhostly/i3.git}"
-linux_moved() {
-  local u="${XDG_DATA_HOME:-$HOME/.local/share}/i3wm-dots-updater/repo-url" tmp rc
-  if [ "$update_mode" -eq 1 ]; then
-    if [ -f "$u" ]; then printf '%s\n' "$LINUX_REPO" >"$u"; fi
-    tmp="$(mktemp -d)"
-    if command -v git >/dev/null 2>&1 && git clone -q --depth 1 "$LINUX_REPO" "$tmp/i3" >/dev/null 2>&1 \
-       && [ -f "$tmp/i3/install.sh" ]; then
-      say "this is Linux: the Linux version of these dots is its own repo - continuing with it"
-      say "(updates come from $LINUX_REPO from now on)"
-      bash "$tmp/i3/install.sh" "$@"; rc=$?
-      # (the version installed now, for the updater - it wrote down this repo's)
-      [ "$rc" -eq 0 ] && [ -d "${u%/*}" ] && git -C "$tmp/i3" rev-parse HEAD >"${u%/*}/handoff" 2>/dev/null
-      rm -rf "$tmp"; exit "$rc"
-    fi
-    rm -rf "$tmp"
-    die "could not download the Linux version ($LINUX_REPO) - updates come from there from now on: try i3dots-update again later"
-  fi
-  die "This is the version for FreeBSD, GhostBSD, OpenBSD and NetBSD. Linux has its own:
-   https://github.com/OmitGhostly/i3   (README.md there has the install command for each distro)"
-}
-case "${I3DOTS_OS:-$(uname -s)}" in Linux) linux_moved "$@" ;; esac
+# ---- the BSDs only -------------------------------------------------------------------
+case "${I3DOTS_OS:-$(uname -s)}" in Linux) die "This config is made for FreeBSD, GhostBSD, OpenBSD and NetBSD - it cannot be installed on Linux." ;; esac
 
 # ---- bootstrap: script was run without the repo next to it (curl | bash) -------
 # (piped from curl the script has no folder of its own: never treat the current directory as the repo by accident)
@@ -175,7 +141,6 @@ if [ ! -f "$here/install.sh" ] || [ ! -f "$here/config/i3/config" ]; then
   dest="${XDG_DATA_HOME:-$HOME/.local/share}/i3wm-dots"
   if [ -d "$dest/.git" ]; then
     # (a copy made from the old repo address follows the new one)
-    run git -C "$dest" remote set-url origin "$(repo_moved "$(git -C "$dest" config --get remote.origin.url 2>/dev/null)")" 2>/dev/null || true
     run git -C "$dest" pull --ff-only || warn "could not update $dest, using what is there"
   else run git clone --depth=1 "$REPO_URL" "$dest" || die "clone failed: $REPO_URL"; fi
   [ "$dry" -eq 1 ] && { say "dry-run: would continue with $dest/install.sh"; exit 0; }
@@ -252,13 +217,51 @@ pkg_stem() { printf '%s\n' "${1%%%*}"; }
 # is this exactly a package name at the start of a "name-version ..." line? (names like gtk+3 are no regex)
 first_word_is() { awk -v s="$1" 'index($0, s "-") == 1 && substr($0, length(s) + 2, 1) ~ /[0-9]/ { f = 1 } END { exit !f }'; }
 
+# Every package name the repository offers, read ONCE - instead of asking the package manager about each of the
+# ~60 packages one by one. (OpenBSD has no such list on the computer: there each one is still asked about.)
+PKG_INDEX="" pkg_index_read=0
+read_pkg_index() {
+  [ "$pkg_index_read" -eq 0 ] || return 0
+  pkg_index_read=1
+  PKG_INDEX="$(mktemp)"; CLEANUP+=("$PKG_INDEX")
+  case "$FAMILY" in
+    freebsd) pkg rquery -a '%n' 2>/dev/null ;;
+    netbsd)  pkgin avail 2>/dev/null | awk -F'[ ;\t]' '{ n = $1; sub(/-[0-9][^-]*$/, "", n); print n }' ;;
+  esac | sort -u >"$PKG_INDEX"
+}
+
 pkg_available() {
+  read_pkg_index
+  [ -s "$PKG_INDEX" ] && grep -qxF -- "$1" "$PKG_INDEX" && return 0
   case "$FAMILY" in
     freebsd) pkg rquery '%n' "$1" 2>/dev/null | grep -qxF "$1" ;;
     openbsd) pkg_info -Q "$(pkg_stem "$1")" 2>/dev/null | first_word_is "$(pkg_stem "$1")" ;;
     netbsd)  pkgin search "^$(printf '%s' "$1" | sed 's/[][+.*?(){}|^$\\]/\\&/g')-[0-9]" 2>/dev/null | first_word_is "$1" ;;
     *)      return 1 ;;
   esac
+}
+
+# Another program installing or updating packages right now (GhostBSD's Update Station, a terminal): the package
+# manager would stop at its lock, so the wait is said out loud. Up to 15 minutes.
+other_installs() {
+  local p
+  for p in pkg pkg-static pkg_add pkg_delete pkgin; do
+    pgrep -x "$p" >/dev/null 2>&1 && printf '%s\n' "$p"
+  done | paste -sd ' ' -
+}
+wait_for_other_installs() {
+  [ "$dry" -eq 1 ] && return 0
+  local busy waited=0
+  busy="$(other_installs)"
+  [ -n "$busy" ] || return 0
+  say "another program is installing or updating packages right now ($busy). Waiting for it to finish (up to 15 minutes)..."
+  while [ -n "$busy" ] && [ "$waited" -lt 900 ]; do
+    sleep 10; waited=$((waited + 10))
+    busy="$(other_installs)"
+    [ $((waited % 60)) -eq 0 ] && [ -n "$busy" ] && say "  still waiting for: $busy ($((waited / 60)) min)"
+  done
+  [ -n "$busy" ] && warn "still busy ($busy) - trying anyway; if the install fails, close it and run this again"
+  return 0
 }
 
 pkg_install() {   # pkg_install pkg...
@@ -362,16 +365,22 @@ install_shell_hook() {
   [ "$do_pokemon" -eq 1 ] || [ "$update_mode" -eq 1 ] || return 0
   local rc real tmp top marker='# i3wm-dots: pokemon fastfetch'
   # I3DOTS_POKEFETCH (not exported) makes sure the greeting shows only once per shell, even if the line is sourced twice
+  # another greeting the shell file runs itself (KoolDots' .zshrc: "pokemon-colorscripts ... | fastfetch ...", or a
+  # plain "fastfetch" line) would show a second one: it is turned off, marked so the uninstaller can put it back
+  local other='^[[:space:]]*(fastfetch|pokemon-colorscripts[^#]*[|][[:space:]]*fastfetch)([[:space:]]|$)' off='#i3wm-dots-off# '
   local line='[ -z "$I3DOTS_POKEFETCH" ] && { [ -n "$KITTY_WINDOW_ID" ] || [ "$TERM_PROGRAM" = ghostty ]; } && [ -x "$HOME/.config/i3/scripts/PokeFetch.sh" ] && { I3DOTS_POKEFETCH=1; "$HOME/.config/i3/scripts/PokeFetch.sh"; }'
   for rc in "${RC_FILES[@]}"; do
     top=0; [ "${rc##*/}" = .zshrc ] && top=1
     if grep -qF "$marker" "$rc" 2>/dev/null; then
       # already there, once, the current version, and (zsh) on the first line: nothing to do
       if grep -qF 'I3DOTS_POKEFETCH' "$rc" && [ "$(grep -cF "$marker" "$rc")" -eq 1 ] \
-         && { [ "$top" -eq 0 ] || [ "$(head -n 1 "$rc")" = "$marker" ]; }; then
+         && { [ "$top" -eq 0 ] || [ "$(head -n 1 "$rc")" = "$marker" ]; } && ! grep -qE "$other" "$rc"; then
         continue
       fi
-      if [ "$top" -eq 1 ]; then say "moving the pokemon fastfetch greeting to the top of $rc (before the prompt theme starts)"
+      if grep -qE "$other" "$rc"; then
+        say "turning off the other fastfetch greeting in $rc (it showed a second one; i3dots-uninstall puts it back):"
+        grep -nE "$other" "$rc" | sed 's/^/     line /'
+      elif [ "$top" -eq 1 ]; then say "moving the pokemon fastfetch greeting to the top of $rc (before the prompt theme starts)"
       else say "refreshing the pokemon fastfetch greeting in $rc (one greeting per terminal)"; fi
     else
       [ "$update_mode" -eq 1 ] && continue
@@ -386,8 +395,9 @@ install_shell_hook() {
     cp -p -- "$real" "$tmp" || continue
     {
       [ "$top" -eq 1 ] && printf '%s\n%s\n' "$marker" "$line"
-      awk -v m="$marker" 'skip { skip = 0; next }
+      awk -v m="$marker" -v o="$other" -v off="$off" 'skip { skip = 0; next }
            index($0, m) == 1 { skip = 1; blank = 0; next }
+           $0 ~ o { $0 = off $0 }
            { if (blank) print ""; blank = 0 }
            /^$/ { blank = 1; next }
            { print }
@@ -635,6 +645,14 @@ install_folder_handler() {
   fi
 }
 
+# what goes into the one big package run besides the list (see install_packages)
+bulk_extras() {
+  [ "$update_mode" -eq 1 ] && return 0
+  [ "$do_ghostty" -eq 1 ] && ! command -v ghostty >/dev/null 2>&1 && echo ghostty
+  have_yazi || echo yazi
+  yazi_extras
+}
+
 install_packages() {
   if [ "$FAMILY" = unknown ]; then
     warn "$SYSNAME: no automatic package install (automated: FreeBSD / GhostBSD, OpenBSD, NetBSD)."
@@ -645,6 +663,7 @@ install_packages() {
     return 0
   fi
   say "$SYSNAME detected - checking which packages your repository provides"
+  wait_for_other_installs
   [ "$FAMILY" = freebsd ] && run $SUDO pkg update
   [ "$FAMILY" = netbsd ] && run $SUDO pkgin -y update
 
@@ -665,12 +684,28 @@ install_packages() {
     if [ -n "$pick" ]; then have+=("$pick"); else missing+=("${item//|/ or }"); fi
   done
 
+  # Asked for in the same run, so the package manager works once instead of three times: Ghostty and yazi where
+  # the repository has them, and yazi's helpers.
+  local extras=()
+  for item in $(bulk_extras); do
+    pick=""
+    IFS='|' read -ra alts <<<"$item"
+    for alt in "${alts[@]}"; do pkg_installed "$alt" && { pick=-; break; }; done      # (there already)
+    if [ -z "$pick" ]; then
+      for alt in "${alts[@]}"; do
+        if [ "$dry" -eq 0 ] && pkg_available "$alt"; then pick="$alt"; break; fi
+      done
+    fi
+    [ -n "$pick" ] && [ "$pick" != - ] && extras+=("$pick")
+  done
+
   local new=() p
-  for p in "${have[@]}"; do pkg_installed "$p" || new+=("$p"); done      # (not installed yet: ours if it gets installed)
-  say "installing ${#have[@]} packages"
-  if ! pkg_install "${have[@]}"; then
+  for p in "${have[@]}" "${extras[@]}"; do pkg_installed "$p" || new+=("$p"); done   # (not installed yet: ours if it gets installed)
+  say "installing $(( ${#have[@]} + ${#extras[@]} )) packages"
+  if ! pkg_install "${have[@]}" "${extras[@]}"; then
     warn "bulk install failed - retrying one package at a time so a single problem cannot block the rest"
     for p in "${have[@]}"; do pkg_install "$p" || missing+=("$p"); done
+    for p in "${extras[@]}"; do pkg_install "$p" >/dev/null 2>&1 || true; done
   fi
   record_new_pkgs "${new[@]}"
 
@@ -719,16 +754,31 @@ enable_dbus() {
   esac
 }
 
+# The font is downloaded while the packages install (it needs no package manager): started here, used by
+# install_font below - which downloads it itself when this did not happen or did not work.
+FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FantasqueSansMono.zip"
+font_pre="" font_pre_pid=""
+have_font() { fc-list 2>/dev/null | grep -iE 'fantasque.*nerd|nerd.*fantasque' >/dev/null; }
+prefetch_font() {
+  [ "$dry" -eq 0 ] && command -v curl >/dev/null 2>&1 || return 0
+  command -v fc-list >/dev/null 2>&1 && have_font && return 0
+  font_pre="$(mktemp -d)"; CLEANUP+=("$font_pre")
+  ( curl -fsSL --retry 2 -o "$font_pre/f.part" "$FONT_URL" && mv -f "$font_pre/f.part" "$font_pre/f.zip" ) >/dev/null 2>&1 &
+  font_pre_pid=$!
+}
+
 install_font() {
+  [ -n "$font_pre_pid" ] && { wait "$font_pre_pid" 2>/dev/null; font_pre_pid=""; }
   command -v fc-list >/dev/null 2>&1 || return 0
   # (grep reads all of fc-list's output: with -q it would stop early, and pipefail would count that as a failure)
-  if fc-list 2>/dev/null | grep -iE 'fantasque.*nerd|nerd.*fantasque' >/dev/null; then return 0; fi
+  if have_font; then return 0; fi
   if command -v curl >/dev/null 2>&1 && command -v unzip >/dev/null 2>&1; then
     say "installing FantasqueSansM Nerd Font (icons in the bar and terminal)"
     local fd="${XDG_DATA_HOME:-$HOME/.local/share}/fonts/FantasqueSansMNerd" tmp
     tmp="$(mktemp -d)"; CLEANUP+=("$tmp")
     # (the folder is written down before unpacking into it, so a stopped install still leaves it recorded)
-    if run curl -fsSL -o "$tmp/f.zip" "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FantasqueSansMono.zip" \
+    if { { [ -n "$font_pre" ] && [ -s "$font_pre/f.zip" ] && run mv -f "$font_pre/f.zip" "$tmp/f.zip"; } \
+         || run curl -fsSL --retry 2 -o "$tmp/f.zip" "$FONT_URL"; } \
        && { [ -e "$fd" ] || record path "$fd"; } && run mkdir -p "$fd" && run unzip -qo "$tmp/f.zip" -d "$fd"; then
       run fc-cache -f "$fd" >/dev/null 2>&1
     else
@@ -740,10 +790,22 @@ install_font() {
   fi
 }
 
-if [ "$do_packages" -eq 1 ]; then install_packages; install_font; fi
+# (the font and the greeting's sprite download while the packages install; their messages follow afterwards)
+poke_out="" poke_pid=""
+if [ "$do_packages" -eq 1 ]; then
+  prefetch_font
+  if [ "$dry" -eq 0 ] && [ "$do_pokemon" -eq 1 ] && command -v git >/dev/null 2>&1; then
+    poke_out="$(mktemp)"; CLEANUP+=("$poke_out")
+    install_pokemon >"$poke_out" 2>&1 &
+    poke_pid=$!
+  fi
+  install_packages; install_font
+fi
 [ "$update_mode" -eq 1 ] || ensure_terminals
 [ "$update_mode" -eq 1 ] || ensure_file_manager
-install_pokemon
+if [ -n "$poke_pid" ]; then wait "$poke_pid" 2>/dev/null; cat "$poke_out" 2>/dev/null; rm -f "$poke_out"; fi
+install_pokemon          # (nothing to do when it is there already: also the way in without git before the packages)
+
 
 # ---- copy configs ---------------------------------------------------------------
 # a first install (not a re-install over our own files): only then does the first login pick a wallpaper
@@ -961,14 +1023,10 @@ setup_updates() {
     # where updates come from: the repo this was installed from (its GitHub address), else the main repo
     url="$(git -C "$here" config --get remote.origin.url 2>/dev/null || true)"
     case "$url" in https://*|git@*) ;; *) url="$REPO_URL" ;; esac
-    printf '%s\n' "$(repo_moved "$url")" >"$state/repo-url"
+    printf '%s\n' "$url" >"$state/repo-url"
     git -C "$here" rev-parse HEAD >"$state/applied" 2>/dev/null || rm -f "$state/applied"
     [ "$do_autoupdate" -eq 1 ] && rm -f "$state/off"
     [ "$do_autoupdate" -eq 0 ] && : >"$state/off"
-  elif [ -f "$state/repo-url" ]; then
-    # an update: a desktop that still gets its updates from an old repo address (the Linux one) switches to this one
-    url="$(repo_moved "$(head -n1 "$state/repo-url")")"
-    [ "$url" = "$(head -n1 "$state/repo-url")" ] || { printf '%s\n' "$url" >"$state/repo-url"; say "updates now come from $url"; }
   fi
   ln -sfn "$cfg/i3/scripts/Update.sh" "$HOME/.local/bin/i3dots-update"
   # the uninstaller, as a copy that outlives ~/.config/i3:  i3dots-uninstall

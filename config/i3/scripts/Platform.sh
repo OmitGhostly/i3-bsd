@@ -12,6 +12,7 @@
 #   Platform.sh wifi                       "SSID<tab>SIGNAL" while connected (SIGNAL can be empty); nothing if not
 #   Platform.sh has battery|backlight|wifi|volume     answers with the exit status
 #   Platform.sh power suspend|hibernate|reboot|poweroff
+#   Platform.sh powermode [get|list|set MODE]   power-saver | balanced | performance (Settings > Power)
 #   Platform.sh airplane [state|toggle|on|off]   airplane mode (no Wi-Fi): prints on | off
 #   Platform.sh bar ITEM                   an item's text for polybar (polybar's own modules for these read
 #                                          Linux's /proc and /sys): network volume backlight battery cpu memory
@@ -22,7 +23,8 @@
 # Volume: pamixer when a sound server answers it, else FreeBSD's mixer, OpenBSD's sndioctl, NetBSD's mixerctl.
 # Brightness: FreeBSD's backlight, else xbacklight (screens that RandR can dim), OpenBSD's wsconsctl.
 # Power: shutdown / zzz / acpiconf - as you, else through doas or sudo when a rule lets you run them without a
-# password.
+# password. Power modes: OpenBSD's hw.perfpolicy (through apmd, else sysctl as root), FreeBSD's powerd (its flags
+# in rc.conf, as root); NetBSD has no such setting.
 
 case "${I3DOTS_OS:-$(uname -s 2>/dev/null)}" in
   FreeBSD|freebsd|GhostBSD|ghostbsd) OS=freebsd ;;
@@ -380,6 +382,46 @@ bar_text() {
 # ------------------------------------------------------------------ main
 cmd=${1:-os}
 [ $# -gt 0 ] && shift
+# ---- power modes --------------------------------------------------------------------------------------------
+# OpenBSD: hw.perfpolicy low | auto | high. FreeBSD: powerd's flags (-a on mains, -b on battery, -n unknown).
+pd_flags() {
+  case "$1" in
+    power-saver) echo "-a adaptive -b minimum -n adaptive" ;;
+    balanced)    echo "-a hiadaptive -b adaptive -n hiadaptive" ;;
+    performance) echo "-a maximum -b hiadaptive -n maximum" ;;
+  esac
+}
+powermode() {
+  case "$OS:$1" in
+    openbsd:get)
+      case "$(sysctl -n hw.perfpolicy 2>/dev/null)" in
+        low) echo power-saver ;; high) echo performance ;; auto|manual) echo balanced ;;
+      esac ;;
+    freebsd:get)
+      have sysrc || return 1
+      case "$(sysrc -n powerd_enable 2>/dev/null)" in [Yy][Ee][Ss]|[Tt][Rr][Uu][Ee]|[Oo][Nn]|1) ;; *) return 1 ;; esac
+      # (what powerd does on mains power)
+      case "$(sysrc -n powerd_flags 2>/dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "-a") { print $(i + 1); exit } }')" in
+        max*) echo performance ;; min*|adaptive|adp) echo power-saver ;; *) echo balanced ;;
+      esac ;;
+    openbsd:list|freebsd:list)
+      [ -n "$(powermode get)" ] && printf '%s\n' power-saver balanced performance ;;
+    openbsd:set)
+      case "$2" in power-saver) v=low; f=-L ;; balanced) v=auto; f=-A ;; performance) v=high; f=-H ;; *) return 2 ;; esac
+      # apmd, when it runs, is the one in charge of the policy (apm asks it); else the sysctl itself, as root
+      if pgrep -x apmd >/dev/null 2>&1 && have apm; then apm "$f" >/dev/null 2>&1; fi
+      [ "$(sysctl -n hw.perfpolicy 2>/dev/null)" = "$v" ] || as_root sysctl "hw.perfpolicy=$v"
+      [ "$(sysctl -n hw.perfpolicy 2>/dev/null)" = "$v" ] || {
+        echo "changing it needs root: a doas rule such as  permit nopass :wheel cmd sysctl" >&2; return 1; } ;;
+    freebsd:set)
+      fl="$(pd_flags "$2")"; [ -n "$fl" ] || return 2
+      [ -n "$(powermode get)" ] || { echo "powerd is not switched on" >&2; return 1; }
+      as_root sysrc "powerd_flags=$fl" && as_root service powerd restart || {
+        echo "changing it needs root: let your user run sysrc and service without a password (doas or sudo)" >&2; return 1; } ;;
+    *) return 1 ;;
+  esac
+}
+
 case "$cmd" in
   os) echo "$OS" ;;
   distro) distro ;;
@@ -395,16 +437,18 @@ case "$cmd" in
     case "${1:-}" in
       battery) battery >/dev/null ;;
       backlight) [ -n "$(bl_backend)" ] ;;
+      powermode) [ -n "$(powermode get)" ] ;;
       wifi) has_wifi ;;
       volume) [ -n "$(vol_backend)" ] ;;
       *) exit 2 ;;
     esac || exit 1 ;;
   power) power "${1:-}" ;;
+  powermode) powermode "${1:-get}" "${2:-}" ;;
   airplane) airplane "${1:-state}" ;;
   bar|plain)
     if [ $# -le 1 ]; then bar_text "$cmd" "${1:-}"
     else                            # several items: "ITEM<tab>TEXT" lines (one call for i3's own bar)
       for it in "$@"; do t=$(bar_text "$cmd" "$it" 2>/dev/null); printf '%s\t%s\n' "$it" "$t"; done
     fi ;;
-  *) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
+  *) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
 esac

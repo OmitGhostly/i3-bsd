@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """i3wm-dots settings window: network (Wi-Fi, Ethernet, IP and DNS, VPN, proxy), Bluetooth, sound, displays
 (resolution, refresh rate, orientation, scale, layout), appearance (window/terminal opacity, gaps, tiling, bar),
-accent colour, terminal themes, mouse (touchpad gestures, cursor) and keybindings.
+accent colour, wallpaper (and a slideshow), terminal themes, mouse (touchpad gestures, cursor) and keybindings.
 
   SettingsGUI.py            open the settings window
   SettingsGUI.py --bar-env  print the saved bar settings as shell variables and write polybar/style.ini
@@ -15,7 +15,7 @@ accent colour, terminal themes, mouse (touchpad gestures, cursor) and keybinding
   SettingsGUI.py --dry-run  with --apply: print the commands instead of running them
   SettingsGUI.py --i3bar-conf  print i3's own bar for the chosen bar (used where polybar is not installed)
   SettingsGUI.py --tab NAME open on a page: network (or wifi ethernet vpn proxy) bluetooth sound displays
-                            appearance colors themes mouse keybindings
+                            power appearance colors wallpaper themes mouse keybindings
 
 Changes are saved to ~/.config/i3/settings.json and applied immediately.
 No root needed.  Requires: python3, python3-gobject (GTK 3), xinput, xrandr (pactl / bluetoothctl / nmcli for those tabs).
@@ -30,6 +30,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 
 CONFIG_DIR = os.path.join((os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")), "i3")
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -162,6 +163,9 @@ def sanitize_settings(data):
                 out[k] = v
         if isinstance(c.get("smart"), bool):
             out["smart"] = c["smart"]
+        v = _num(c.get("corners"), 0, CORNERS_MAX)
+        if v is not None:
+            out["corners"] = v
         return out
 
     def bar(c):
@@ -179,6 +183,8 @@ def sanitize_settings(data):
         for k in ("title", "media"):
             if isinstance(c.get(k), bool):
                 out[k] = c[k]
+        if c.get("clock") in ("12", "24"):
+            out["clock"] = c["clock"]
         if _num(c.get("spacing"), 0, BAR_SPACING_MAX) is not None:
             out["spacing"] = clean_spacing(c["spacing"])
         if isinstance(c.get("bg_mode"), str) and c["bg_mode"] in dict(BAR_BG_MODES):
@@ -875,6 +881,22 @@ def apply_terminal_opacity(settings):
         subprocess.run(["pkill", "-USR1", "-x", "kitty"], capture_output=True)         # kitty reloads its config
 
 
+def restart_picom():
+    """Stop picom and start it again with its config. (Picom.sh does nothing while one still runs, so the old one
+    has to be gone first - picom takes a moment to exit.)"""
+    me = str(os.getuid())
+    subprocess.run(["pkill", "-u", me, "-x", "picom"])
+    for _ in range(30):
+        if subprocess.run(["pgrep", "-u", me, "-x", "picom"], capture_output=True).returncode != 0:
+            break
+        time.sleep(0.1)
+    else:
+        subprocess.run(["pkill", "-KILL", "-u", me, "-x", "picom"])
+        time.sleep(0.2)
+    subprocess.Popen([os.path.join(CONFIG_DIR, "scripts", "Picom.sh")],
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+
+
 def apply_opacity(settings, restart=False):
     """Window opacity: picom's focused / unfocused values, and the terminal's own background opacity."""
     apply_terminal_opacity(settings)
@@ -906,9 +928,7 @@ def apply_picom_opacity(settings, restart=False):
         f.write(text)
     os.replace(PICOM_CONF + ".i3tmp", PICOM_CONF)
     if restart and subprocess.run(["pgrep", "-x", "picom"], capture_output=True).returncode == 0:
-        subprocess.run(["pkill", "-u", str(os.getuid()), "-x", "picom"])
-        subprocess.Popen([os.path.join(CONFIG_DIR, "scripts", "Picom.sh")],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        restart_picom()
 
 
 # ------------------------------------------------------------------ terminal themes (Ghostty, kitty)
@@ -1091,6 +1111,33 @@ def apply_gaps(settings, reload=False):
         run(["i3-msg", "reload"])
     else:
         run(["i3-msg", "gaps inner all set %d; gaps outer all set %d" % (inner, outer)])
+
+
+# ------------------------------------------------------------------ rounded window corners (picom)
+CORNERS_MAX = 10                  # the slider: 0 = square corners ... 10 = very round
+CORNER_PX = 2                     # pixels of corner radius per step (the shipped look, 8 px, is step 4)
+CORNERS_DEFAULT = 4
+
+
+def corners_level():
+    """The corner rounding picom uses now, as a slider step (0-10)."""
+    return min(CORNERS_MAX, max(0, int(round(read_value(PICOM_CONF, "corner-radius", CORNERS_DEFAULT * CORNER_PX)
+                                             / CORNER_PX))))
+
+
+def apply_corners(settings, restart=False):
+    """Rounded window corners: picom's corner-radius (0 = square). Restarts picom when the file changed."""
+    cfg = settings.get("gaps") or {}
+    if "corners" not in cfg or not os.path.exists(PICOM_CONF):
+        return
+    try:
+        level = min(CORNERS_MAX, max(0, int(cfg["corners"])))
+    except (TypeError, ValueError):
+        return
+    if set_conf_line(PICOM_CONF, r"^[ \t]*corner-radius[ \t]*=.*$", "corner-radius = %d;" % (level * CORNER_PX)) \
+            and restart and not DRY and not FILES_ONLY \
+            and subprocess.run(["pgrep", "-x", "picom"], capture_output=True).returncode == 0:
+        restart_picom()
 
 
 # ------------------------------------------------------------------ colour theme (accent colour for everything)
@@ -1556,7 +1603,7 @@ def apply_gestures(settings):
 
 # ------------------------------------------------------------------ top bar (polybar)
 BAR_DEFAULT = {"position": "top", "monitors": None, "size": "large", "style": "solid", "divider": "rounded",
-               "title": False, "media": False, "spacing": 12,
+               "title": False, "media": False, "clock": "24", "spacing": 12,
                "bg_mode": "solid", "bg_opacity": 70, "bg_color": "#000000"}
 # the bar's own background (the dark part around the blocks - the blocks themselves never change): solid, see-through
 # (bg_opacity, 0-100 %) or blurred (see-through, and picom blurs what is behind it), in any colour (bg_color)
@@ -1636,12 +1683,18 @@ def bar_choice(settings):
     return {"bottom": bar.get("position") == "bottom", "size": pick("size", BAR_SIZES),
             "style": pick("style", dict(BAR_STYLES)), "divider": pick("divider", dict(BAR_DIVIDERS)),
             "title": bar.get("title") is True, "media": bar.get("media") is True,
+            "clock": "12" if bar.get("clock") == "12" else "24",
             "spacing": clean_spacing(bar.get("spacing")),
             "bg_mode": pick("bg_mode", dict(BAR_BG_MODES)),
             "bg_opacity": _num(bar.get("bg_opacity"), 0, 100) if _num(bar.get("bg_opacity"), 0, 100) is not None
             else BAR_DEFAULT["bg_opacity"],
             "bg_color": norm_accent(bar.get("bg_color")) or BAR_DEFAULT["bg_color"],
             "monitors": [m for m in mons if isinstance(m, str)] if isinstance(mons, list) else []}
+
+
+# the bar's clock: 24-hour (15:30) or 12-hour (3:30 PM)
+CLOCK_FORMATS = {"24": "%H:%M", "12": "%I:%M %p"}   # (polybar knows no %-I)
+_preview_clock = {"fmt": CLOCK_FORMATS["24"]}      # (what the Appearance preview shows: the form, before Apply)
 
 
 def bar_bg_value(mode, opacity, color):
@@ -1961,7 +2014,7 @@ def bar_env(settings):
            # the workspaces: polybar's module, or (joined-up styles) the strip PolybarWorkspaces.py draws
            "BAR_LEFT_B": ("b-wsj" if choice["style"] in BAR_JOINED else "b-i3") + (" xwindow" if choice["title"] else ""),
            "BAR_RIGHT": " ".join(bar_modules(items)), "BAR_RIGHT_B": " ".join("b-" + m for m in bar_modules(items)),
-           "BAR_MONITORS": " ".join(choice["monitors"])}
+           "BAR_MONITORS": " ".join(choice["monitors"]), "BAR_TIME": CLOCK_FORMATS[choice["clock"]]}
     return "\n".join("%s=%s" % (k, shlex.quote(str(v))) for k, v in env.items())
 
 
@@ -2093,8 +2146,7 @@ def paint_bar(cr, width, style, divider, accent, size="large", items=None, title
         items = list(items if items is not None else BAR_ITEMS)
         texts = {m: PREVIEW_TEXT[m][0 if nerd else 1] for m in items}
         if "date" in texts:
-            import time
-            texts["date"] = time.strftime("%a %d %b  %H:%M")
+            texts["date"] = time.strftime("%a %d %b  " + _preview_clock["fmt"])
     h, font_px, icon_px = dims["height"], dims["text"][0], dims["icon"][0]
     rows, extra = bar_style_rows(style, divider, items, h, lambda n: pal[n], spacing, None if thumb else bar_bg)
     layout = PangoCairo.create_layout(cr)
@@ -2365,9 +2417,7 @@ def apply_bar_blur(settings, restart=True):
         f.write(text)
     os.replace(PICOM_CONF + ".i3tmp", PICOM_CONF)
     if restart and not FILES_ONLY and subprocess.run(["pgrep", "-x", "picom"], capture_output=True).returncode == 0:
-        subprocess.run(["pkill", "-u", str(os.getuid()), "-x", "picom"])
-        subprocess.Popen([os.path.join(CONFIG_DIR, "scripts", "Picom.sh")],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        restart_picom()
 
 
 def apply_bar(settings):
@@ -2573,6 +2623,109 @@ def apply_sound(settings):
                                                      "false" if cfg["screenshot_sound"] else "true"))
     if os.path.isdir(CONFIG_DIR):
         _write_if_changed(SOUNDS_CONF, text)
+
+
+# ------------------------------------------------------------------ power modes (Platform.sh powermode)
+# OpenBSD: hw.perfpolicy (through apmd, else sysctl). FreeBSD / GhostBSD: powerd's flags. NetBSD: no such setting.
+POWER_MODES = (("power-saver", "Power saver", "\U000F032A",
+                "Longer battery, a cooler and quieter computer. Programs may run a bit slower."),
+               ("balanced", "Balanced", "\U000F0079", "Good speed when you need it, and saves power when you don't."),
+               ("performance", "Performance", "\U000F0241",
+                "As fast as it goes: for games and big jobs. Uses more power and runs warmer."))
+POWER_HINT = {
+    "freebsd": "Power modes use powerd, which is not switched on. As root:  sysrc powerd_enable=YES && service powerd "
+               "start   - and to change the mode from here, let your user run sysrc and service without a password "
+               "(doas or sudo).",
+    "openbsd": "Power modes use hw.perfpolicy, which this computer does not offer.",
+    "netbsd": "NetBSD has no power mode setting; the CPU's speed is managed by the kernel (or estd from pkgsrc)."}[SYSTEM]
+
+
+def power_state():
+    """The power mode now: {'active', 'profiles' [names], 'degraded', 'inhibited'} or None (no such setting)."""
+    plat = os.path.join(SCRIPTS_DIR, "Platform.sh")
+    active = query([plat, "powermode", "get"]).strip()
+    if not active:
+        return None
+    profs = query([plat, "powermode", "list"]).split()
+    return {"active": active, "profiles": profs or [active], "degraded": "", "inhibited": ""}
+
+
+def set_power_mode(mode):
+    """Switch the power mode (power-saver | balanced | performance). None, or what went wrong."""
+    if DRY:
+        print("+ power mode:", mode)
+        return None
+    try:
+        r = subprocess.run([os.path.join(SCRIPTS_DIR, "Platform.sh"), "powermode", "set", mode],
+                           capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return str(e)
+    return None if r.returncode == 0 else (r.stderr.strip() or "it did not work")
+
+
+# ------------------------------------------------------------------ wallpaper slideshow (WallCycle.sh)
+WALL_DIR = os.environ.get("WALL_DIR") or os.path.expanduser("~/Pictures/wallpapers")
+WALL_STATE = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "i3wm-dots")
+WALLCYCLE_CONF = os.path.join(WALL_STATE, "wallcycle.conf")
+WALL_EXT = (".jpg", ".jpeg", ".png", ".webp")
+# how often the slideshow changes the picture: seconds (0 = once at every login), or "custom" (minutes you type)
+WALL_INTERVALS = [(60, "1 minute"), (120, "2 minutes"), (300, "5 minutes"), (600, "10 minutes"),
+                  (900, "15 minutes"), (1800, "30 minutes"), (3600, "1 hour"), (7200, "2 hours"),
+                  (18000, "5 hours"), (43200, "12 hours"), (86400, "1 day"), (604800, "1 week"),
+                  (0, "At every login (each restart)")]
+WALLCYCLE_DEFAULT = {"enabled": False, "folder": WALL_DIR, "interval": 600, "order": "random"}
+
+
+def wallcycle_choice(settings):
+    """The saved slideshow choice, checked: {enabled, folder, interval (seconds, 0 = at login), order}."""
+    c = dict(WALLCYCLE_DEFAULT)
+    w = settings.get("wallpaper") if isinstance(settings.get("wallpaper"), dict) else {}
+    c["enabled"] = w.get("enabled") is True
+    f = w.get("folder")
+    if isinstance(f, str) and f.strip() and "\n" not in f:
+        c["folder"] = os.path.expanduser(f.strip())
+    i = w.get("interval")
+    if isinstance(i, int) and not isinstance(i, bool) and (i == 0 or 10 <= i <= 31 * 86400):
+        c["interval"] = i
+    c["order"] = "name" if w.get("order") == "name" else "random"
+    return c
+
+
+def wall_pictures(folder, limit=2000):
+    """The pictures in a folder (and its folders, three deep), sorted by name."""
+    out = []
+    folder = os.path.expanduser(folder or "")
+    if not os.path.isdir(folder):
+        return out
+    base = folder.rstrip(os.sep).count(os.sep)
+    for d, dirs, files in os.walk(folder, followlinks=True):
+        if d.count(os.sep) - base >= 3:
+            dirs[:] = []
+        dirs.sort()
+        for f in sorted(files):
+            if f.lower().endswith(WALL_EXT) and os.path.isfile(os.path.join(d, f)):
+                out.append(os.path.join(d, f))
+                if len(out) >= limit:
+                    return sorted(out)
+    return sorted(out)
+
+
+def current_wallpaper():
+    """The wallpaper showing now (Wallpaper.sh remembers it), or None."""
+    try:
+        with open(os.path.join(WALL_STATE, "wallpaper")) as f:
+            p = f.readline().strip()
+        return p if p and os.path.isfile(p) else None
+    except OSError:
+        return None
+
+
+def apply_wallcycle(settings):
+    """Write the slideshow choice for WallCycle.sh (it starts at login; the window restarts it on Apply)."""
+    c = wallcycle_choice(settings)
+    _write_if_changed(WALLCYCLE_CONF, "# Written by the Settings window (Wallpaper tab). Read by scripts/WallCycle.sh.\n"
+                      "enabled=%d\nfolder=%s\ninterval=%d\norder=%s\n"
+                      % (1 if c["enabled"] else 0, c["folder"], c["interval"], c["order"]))
 
 
 # ------------------------------------------------------------------ bluetooth (bluetoothctl / BlueZ)
@@ -3507,8 +3660,8 @@ def refresh_files(settings):
     global FILES_ONLY
     FILES_ONLY = True
     failed = []
-    for step in (apply_cursor, apply_opacity, apply_themes, apply_terminal_font, apply_colors, apply_gaps, apply_apps,
-                 apply_gestures, apply_bar_blur):
+    for step in (apply_cursor, apply_opacity, apply_themes, apply_terminal_font, apply_colors, apply_gaps, apply_corners,
+                 apply_apps, apply_gestures, apply_bar_blur):
         try:
             step(settings)
         except Exception as e:  # noqa: BLE001 - one bad setting must not stop the others
@@ -3525,7 +3678,7 @@ def refresh_files(settings):
 def apply_all(settings):
     """Apply every saved setting. One failing step is reported but never stops the others."""
     for step in (apply_mouse, apply_cursor, apply_monitors, apply_opacity, apply_themes, apply_terminal_font, apply_colors,
-                 apply_gaps, apply_apps, apply_sound, apply_gestures, apply_bar_blur):
+                 apply_gaps, apply_corners, apply_apps, apply_sound, apply_gestures, apply_bar_blur, apply_wallcycle):
         try:
             step(settings)
         except Exception as e:  # noqa: BLE001 - login must not break on a bad setting
@@ -3537,8 +3690,8 @@ def apply_all(settings):
 
 
 # ------------------------------------------------------------------ one settings window at a time
-TAB_NAMES = ("mouse", "displays", "appearance", "colors", "themes", "keybindings", "sound", "bluetooth", "network",
-             "wifi", "ethernet", "vpn", "proxy")
+TAB_NAMES = ("mouse", "displays", "power", "appearance", "colors", "themes", "wallpaper", "keybindings", "sound", "bluetooth",
+             "network", "wifi", "ethernet", "vpn", "proxy")
 NET_PARTS = ("wifi", "ethernet", "vpn", "proxy")     # (parts of the Network page: --tab wifi opens it on Wi-Fi)
 # the list on the left: (page, name, icon (Nerd Font), words the search finds it by, group)
 SIDEBAR = (("network", "Network", "\U000F05A9", "network wifi wi-fi wireless internet ethernet lan wired cable ip "
@@ -3547,9 +3700,13 @@ SIDEBAR = (("network", "Network", "\U000F05A9", "network wifi wi-fi wireless int
            ("sound", "Sound", "\U000F057E", "sound volume audio speakers headphones microphone mic output input", 0),
            ("displays", "Displays", "\U000F0379", "displays monitors screens resolution refresh rate rotate rotation "
                                                     "scale arrange primary brightness backlight dim", 1),
-           ("appearance", "Appearance", "\U000F056E", "appearance bar opacity transparency gaps tiling spiral blur "
+           ("power", "Power", "\U000F0079", "power mode profile battery saver low power balanced performance "
+                                             "energy speed fast laptop", 1),
+           ("appearance", "Appearance", "\U000F056E", "appearance bar opacity transparency gaps rounded corners radius tiling spiral blur "
                                                         "workspaces position size style", 1),
            ("colors", "Colors", "\U000F03D8", "colors colours accent", 1),
+           ("wallpaper", "Wallpaper", "\U000F02E9", "wallpaper background picture photo image slideshow cycle "
+                                                      "change rotate folder", 1),
            ("themes", "Themes", "\U000F018D", "themes terminal ghostty kitty font text size colours", 1),
            ("mouse", "Mouse", "\U000F037D", "mouse touchpad trackpad pointer speed acceleration cursor gestures "
                                               "swipe", 2),
@@ -3724,6 +3881,18 @@ frame > label { color: @A@; font-weight: bold; }
 .mon-off .mon-num { font-size: 14pt; }
 .mon-off.mon-sel { border: 2px solid @A@; }
 .mon-off.mon-sel label { color: @A@; }
+/* the Power tab */
+button.pmode { padding: 18px 12px; border-radius: 14px; border: 2px solid #1f1f1f; background-color: #0a0a0a; }
+button.pmode:hover { border-color: #6e6e6e; }
+button.pmode:checked, button.pmode:checked:hover { border-color: @A@; background-color: #141414; }
+.pmode-icon { font-family: "FantasqueSansM Nerd Font Mono"; font-size: 26pt; }
+.pmode-name { font-weight: bold; font-size: 12pt; }
+/* the Wallpaper tab */
+button.wall { padding: 3px; border-radius: 10px; border: 2px solid #1f1f1f; background-color: #0a0a0a; }
+button.wall image { -gtk-icon-shadow: none; }   /* (the theme's 1px light shadow under a button's picture) */
+button.wall:hover { border-color: #6e6e6e; }
+button.wall-on, button.wall-on:hover { border-color: @A@; }
+.wall-now { border: 1px solid #1f1f1f; border-radius: 10px; }
 .ident { font-size: 72pt; font-weight: bold; color: #000000; background-color: @A@; padding: 10px 40px;
          border-radius: 16px; }
 """
@@ -4493,8 +4662,18 @@ def launch_gui(confirm=True, tab=None):
     ap.pack_start(row("Between windows", gap_inner), False, False, 0)
     ap.pack_start(row("Around the screen edge", gap_outer), False, False, 0)
     ap.pack_start(row("No gaps for a lone window", gap_smart), False, False, 0)
-    ap.pack_start(dim("0 px = windows touch (no gap). Turning the last option on makes a single window "
-                      "fill the screen. Changing it reloads i3 (your windows stay open)."), False, False, 0)
+    corner_sc = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, CORNERS_MAX, 1)
+    corner_sc.set_digits(0)
+    corner_sc.set_value_pos(Gtk.PositionType.RIGHT)
+    try:
+        corner_sc.set_value(min(CORNERS_MAX, max(0, int(gp["corners"]))) if "corners" in gp else corners_level())
+    except (TypeError, ValueError):
+        corner_sc.set_value(corners_level())
+    corner_sc.connect("format-value", lambda _s, v: "%d" % v)
+    ap.pack_start(row("Rounded corners", corner_sc), False, False, 0)
+    ap.pack_start(dim("0 px = windows touch (no gap). Turning \"No gaps for a lone window\" on makes a single window "
+                      "fill the screen; changing it reloads i3 (your windows stay open). Rounded corners: 0 is square, "
+                      "10 is very round - it needs the compositor (picom) running."), False, False, 0)
 
     # window tiling section (same tab)
     ap.pack_start(Gtk.Separator(), False, False, 6)
@@ -4612,6 +4791,13 @@ def launch_gui(confirm=True, tab=None):
     bar_media.set_halign(Gtk.Align.START)
     bar_media.set_active(bar_saved.get("media") is True)
     ap.pack_start(row("Show what is playing", bar_media), False, False, 0)
+    bar_clock = Gtk.ComboBoxText()
+    bar_clock.append("24", "24-hour  (" + time.strftime(CLOCK_FORMATS["24"]) + ")")
+    bar_clock.append("12", "12-hour  (" + time.strftime(CLOCK_FORMATS["12"]) + ")")
+    bar_clock.set_active_id(bar_choice(settings)["clock"])
+    _preview_clock["fmt"] = CLOCK_FORMATS[bar_clock.get_active_id() or "24"]
+    ap.pack_start(row("Clock", bar_clock), False, False, 0)
+    bar_clock.connect("changed", lambda c: _preview_clock.update(fmt=CLOCK_FORMATS[c.get_active_id() or "24"]))
     # a picture of the bar as it will look, kept up to date with every choice above (and the Colors tab)
     preview_items = bar_items({"media": False})          # the items this computer shows (no battery on a desktop...)
     if have_cairo:
@@ -4656,7 +4842,7 @@ def launch_gui(confirm=True, tab=None):
         bar_preview.set_size_request(-1, BAR_SIZES[bar_size.get_active_id() or BAR_DEFAULT["size"]]["height"] + 1)
         bar_preview.queue_draw()
     for w, sig in ((bar_style, "changed"), (bar_div, "changed"), (bar_size, "changed"), (bar_pos, "changed"),
-                   (bar_title, "notify::active"), (bar_media, "notify::active"), (bar_style, "notify::scale-factor")):
+                   (bar_title, "notify::active"), (bar_media, "notify::active"), (bar_clock, "changed"), (bar_style, "notify::scale-factor")):
         w.connect(sig, refresh_bar_pictures)
     accent_listeners.append(refresh_bar_pictures)
     if have_cairo:
@@ -6354,6 +6540,313 @@ def launch_gui(confirm=True, tab=None):
     set_accent(acc["v"])
     add_page("colors", scrolled(cp))
 
+    # ---------------- power tab: power saver / balanced / performance (the system's power profiles service)
+    pwp = page()
+    pw_title = Gtk.Label(label="Power", xalign=0)
+    pw_title.get_style_context().add_class("title")
+    pwp.pack_start(pw_title, False, False, 0)
+    pw_btns = {}
+    pw_box = Gtk.Box(spacing=12, homogeneous=True)
+    for mode, name, icon, about in POWER_MODES:
+        b_ = Gtk.ToggleButton()
+        b_.get_style_context().add_class("pmode")
+        v_ = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        ic = Gtk.Label(label=icon)
+        ic.get_style_context().add_class("pmode-icon")
+        nm = Gtk.Label(label=name)
+        nm.get_style_context().add_class("pmode-name")
+        ab = Gtk.Label(label=about)
+        ab.set_line_wrap(True)
+        ab.set_max_width_chars(26)
+        ab.set_justify(Gtk.Justification.CENTER)
+        ab.get_style_context().add_class("dim")
+        for w_ in (ic, nm, ab):
+            v_.pack_start(w_, False, False, 0)
+        b_.add(v_)
+        pw_btns[mode] = b_
+        pw_box.pack_start(b_, True, True, 0)
+    pwp.pack_start(pw_box, False, False, 0)
+    pw_msg = dim("")
+    pwp.pack_start(pw_msg, False, False, 0)
+    pw_bat = dim("")
+    pwp.pack_start(pw_bat, False, False, 0)
+    pwp.pack_start(dim("The mode changes right away. FreeBSD and GhostBSD: it is written into powerd's settings "
+                       "(rc.conf), so it stays after a restart. OpenBSD: it lasts until the restart, where apmd's "
+                       "flags decide again."), False, False, 0)
+    pw_busy = {"on": False}
+
+    def pw_show(*_a):
+        st = power_state()
+        pw_busy["on"] = True
+        for mode, b_ in pw_btns.items():
+            b_.set_active(bool(st) and st["active"] == mode)
+            b_.set_sensitive(bool(st) and mode in st["profiles"])
+        pw_busy["on"] = False
+        if not st:
+            pw_msg.set_text(POWER_HINT)
+        else:
+            name = dict((m, n) for m, n, _i, _a in POWER_MODES).get(st["active"], st["active"] or "unknown")
+            notes = ["Now: %s." % name]
+            if st["degraded"]:
+                notes.append("Performance is held back right now (%s)." % st["degraded"].replace("-", " "))
+            if st["inhibited"]:
+                notes.append("Performance is blocked right now (%s)." % st["inhibited"].replace("-", " "))
+            pw_msg.set_text(" ".join(notes))
+        bat = query([os.path.join(SCRIPTS_DIR, "Platform.sh"), "battery"]).split()     # ("82 charging")
+        pw_bat.set_text("Battery: %s%%, %s" % (bat[0], bat[1]) if len(bat) >= 2 else "")
+        pw_bat.set_visible(len(bat) >= 2)
+        return False
+
+    def pw_pick(b_, mode):
+        if pw_busy["on"] or not b_.get_active():
+            if not pw_busy["on"] and not b_.get_active():   # (a click on the mode already on keeps it on)
+                pw_busy["on"] = True
+                b_.set_active(True)
+                pw_busy["on"] = False
+            return
+        e = set_power_mode(mode)
+        if e:
+            pw_msg.set_text("Could not switch: %s" % e)
+        GLib.timeout_add(400, pw_show)
+    for mode, b_ in pw_btns.items():
+        b_.connect("toggled", pw_pick, mode)
+    pwp.connect("map", pw_show)
+    GLib.timeout_add_seconds(10, lambda: (pw_show() if pwp.get_mapped() else None) or True)
+    add_page("power", scrolled(pwp))
+
+    # ---------------- wallpaper tab: pick one (like SUPER+W), or let a folder of pictures cycle
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import GdkPixbuf
+    import threading as _wthreads
+    wlp = page()
+    wtitle = Gtk.Label(label="Wallpaper", xalign=0)
+    wtitle.get_style_context().add_class("title")
+    wlp.pack_start(wtitle, False, False, 0)
+
+    def wall_thumb(path, w, h):
+        """A picture filling w x h, cut to fit like the wallpaper on the screen (None if it cannot be read)."""
+        try:
+            _fmt, pw, ph = GdkPixbuf.Pixbuf.get_file_info(path)
+            if not pw or not ph:
+                return None
+            k = max(w / pw, h / ph)
+            # (2 pixels to spare: the scaled JPEG loader can leave its last row unfinished - a light line)
+            sw_, sh_ = max(w, int(math.ceil(pw * k))) + 2, max(h, int(math.ceil(ph * k))) + 2
+            pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, sw_, sh_, False)
+            return pb.new_subpixbuf((pb.get_width() - w) // 2, (pb.get_height() - h) // 2, w, h).copy()
+        except Exception:  # noqa: BLE001 - a broken or odd file just gets no thumbnail
+            return None
+
+    now_img = Gtk.Image()
+    now_img.get_style_context().add_class("wall-now")
+    now_name = dim("")
+    now_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+    now_box.set_halign(Gtk.Align.START)
+    now_box.pack_start(now_img, False, False, 0)
+    now_box.pack_start(now_name, False, False, 0)
+    wlp.pack_start(row("Showing now", now_box), False, False, 0)
+    wall_buttons = {}                                   # picture -> its button in the grid
+    wall_now = {"p": current_wallpaper()}
+
+    def show_now(path):
+        wall_now["p"] = path
+        for p_, b_ in wall_buttons.items():
+            (b_.get_style_context().add_class if p_ == path else b_.get_style_context().remove_class)("wall-on")
+        if not path:
+            now_img.clear()
+            now_name.set_text("No wallpaper picked yet.")
+            return
+        now_name.set_text(path.replace(os.path.expanduser("~"), "~"))
+
+        def load():
+            pb = wall_thumb(path, 320, 180)
+            GLib.idle_add(lambda: (now_img.set_from_pixbuf(pb) if pb and wall_now["p"] == path else None) and False)
+        _wthreads.Thread(target=load, daemon=True).start()
+
+    def set_wallpaper(path):
+        """Use a picture now, the same way SUPER+W does (Wallpaper.sh remembers it for the next login)."""
+        if DRY:
+            print("+ Wallpaper.sh --set", path)
+        else:
+            subprocess.Popen([os.path.join(SCRIPTS_DIR, "Wallpaper.sh"), "--set", path],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        show_now(path)
+        status.set_text("Wallpaper: %s" % os.path.basename(path))
+
+    # the pictures of a folder, as a grid: a click uses one right away
+    pick_t = Gtk.Label(label="Pick a wallpaper", xalign=0)
+    pick_t.get_style_context().add_class("title")
+    wlp.pack_start(pick_t, False, False, 0)
+    wlp.pack_start(dim("Click a picture to use it right away - the same as SUPER+W. It stays your wallpaper after a "
+                       "restart (unless the slideshow below is on)."), False, False, 0)
+    browse = Gtk.FileChooserButton(title="Show the pictures of a folder", action=Gtk.FileChooserAction.SELECT_FOLDER)
+    if os.path.isdir(WALL_DIR):
+        browse.set_filename(WALL_DIR)
+    other = Gtk.Button(label="Another picture...")
+    bb = Gtk.Box(spacing=10)
+    bb.pack_start(browse, True, True, 0)
+    bb.pack_start(other, False, False, 0)
+    wlp.pack_start(row("Pictures from", bb), False, False, 0)
+    flow = Gtk.FlowBox()
+    flow.set_selection_mode(Gtk.SelectionMode.NONE)
+    flow.set_homogeneous(True)
+    flow.set_max_children_per_line(6)
+    flow.set_min_children_per_line(2)
+    flow.set_column_spacing(10)
+    flow.set_row_spacing(10)
+    wlp.pack_start(flow, False, False, 0)
+    flow_msg = dim("")
+    wlp.pack_start(flow_msg, False, False, 0)
+    flow_gen = {"n": 0}                                 # a newer folder stops the thumbnails of the old one
+
+    def fill_flow(folder):
+        flow_gen["n"] += 1
+        gen = flow_gen["n"]
+        for c in flow.get_children():
+            flow.remove(c)
+        wall_buttons.clear()
+        pics = wall_pictures(folder, limit=300)
+        flow_msg.set_text("" if pics else "No pictures (jpg, png, webp) in %s." % (folder or "this folder"))
+        if len(pics) == 300:
+            flow_msg.set_text("Showing the first 300 pictures of this folder.")
+        for p_ in pics:
+            b_ = Gtk.Button()
+            b_.get_style_context().add_class("wall")
+            b_.set_tooltip_text(os.path.basename(p_))
+            img = Gtk.Image.new_from_icon_name("image-x-generic", Gtk.IconSize.DIALOG)
+            img.set_size_request(160, 90)
+            b_.add(img)
+            b_.connect("clicked", lambda _b, q=p_: set_wallpaper(q))
+            if p_ == wall_now["p"]:
+                b_.get_style_context().add_class("wall-on")
+            wall_buttons[p_] = b_
+            flow.add(b_)
+        flow.show_all()
+
+        def load():                                     # thumbnails in the background: a big folder never freezes
+            for p_ in pics:
+                if flow_gen["n"] != gen:
+                    return
+                pb = wall_thumb(p_, 160, 90)
+                if pb is not None:
+                    GLib.idle_add(lambda q=p_, pb_=pb: (flow_gen["n"] == gen and q in wall_buttons and
+                                                        wall_buttons[q].get_child().set_from_pixbuf(pb_)) and False)
+        _wthreads.Thread(target=load, daemon=True).start()
+    browse.connect("file-set", lambda b: fill_flow(b.get_filename()))
+
+    def pick_other(*_a):
+        d = Gtk.FileChooserDialog(title="Choose a wallpaper", transient_for=win, action=Gtk.FileChooserAction.OPEN)
+        d.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        d.add_button("Use it", Gtk.ResponseType.OK)
+        flt = Gtk.FileFilter()
+        flt.set_name("Pictures")
+        for e in WALL_EXT:
+            flt.add_pattern("*" + e)
+            flt.add_pattern("*" + e.upper())
+        d.add_filter(flt)
+        if browse.get_filename():
+            d.set_current_folder(browse.get_filename())
+        if d.run() == Gtk.ResponseType.OK and d.get_filename():
+            set_wallpaper(d.get_filename())
+        d.destroy()
+    other.connect("clicked", pick_other)
+
+    # the slideshow
+    wlp.pack_start(Gtk.Separator(), False, False, 6)
+    cyc_t = Gtk.Label(label="Slideshow", xalign=0)
+    cyc_t.get_style_context().add_class("title")
+    wlp.pack_start(cyc_t, False, False, 0)
+    wc_saved = {"v": wallcycle_choice(settings)}
+    wc = wc_saved["v"]
+    wc_on = Gtk.Switch()
+    wc_on.set_halign(Gtk.Align.START)
+    wc_on.set_active(wc["enabled"])
+    wlp.pack_start(row("Change the wallpaper by itself", wc_on), False, False, 0)
+    wc_folder = Gtk.FileChooserButton(title="The folder of pictures to cycle through",
+                                      action=Gtk.FileChooserAction.SELECT_FOLDER)
+    if os.path.isdir(wc["folder"]):
+        wc_folder.set_filename(wc["folder"])
+    wc_count = dim("")
+    fb_ = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+    fb_.pack_start(wc_folder, False, False, 0)
+    fb_.pack_start(wc_count, False, False, 0)
+    wlp.pack_start(row("Folder", fb_), False, False, 0)
+    wc_every = Gtk.ComboBoxText()
+    for secs, name in WALL_INTERVALS:
+        wc_every.append(str(secs), "Every " + name if secs else name)
+    wc_every.append("custom", "Custom...")
+    wc_min = Gtk.SpinButton.new_with_range(1, 44640, 1)       # (up to 31 days)
+    wc_min.set_halign(Gtk.Align.START)
+    known = [secs for secs, _n in WALL_INTERVALS]
+    if wc["interval"] in known:
+        wc_every.set_active_id(str(wc["interval"]))
+        wc_min.set_value(max(1, wc["interval"] // 60) if wc["interval"] else 10)
+    else:
+        wc_every.set_active_id("custom")
+        wc_min.set_value(max(1, round(wc["interval"] / 60)))
+    wlp.pack_start(row("Change it", wc_every), False, False, 0)
+    wc_min_row = row("Every (minutes)", wc_min)
+    wlp.pack_start(wc_min_row, False, False, 0)
+    wc_order = Gtk.ComboBoxText()
+    wc_order.append("random", "Shuffled (each picture once, then a new shuffle)")
+    wc_order.append("name", "In order, by file name")
+    wc_order.set_active_id(wc["order"])
+    wlp.pack_start(row("Order", wc_order), False, False, 0)
+    wc_next = Gtk.Button(label="Next picture now")
+    wc_next.set_halign(Gtk.Align.START)
+    wlp.pack_start(row("Skip ahead", wc_next), False, False, 0)
+    wlp.pack_start(dim("Pick a folder of pictures and how long each one stays. \"At every login\" changes it once, "
+                       "each time you log in or restart. The time is counted while you are logged out too, and "
+                       "picking a wallpaper yourself starts the wait again. Press Apply to start (or stop) the "
+                       "slideshow."), False, False, 0)
+
+    def wc_form():
+        f = wc_folder.get_filename() or wc_saved["v"]["folder"]
+        sid = wc_every.get_active_id() or "600"
+        secs = int(wc_min.get_value()) * 60 if sid == "custom" else int(sid)
+        return {"enabled": wc_on.get_active(), "folder": f, "interval": secs,
+                "order": wc_order.get_active_id() or "random"}
+
+    def wc_sync(*_a):
+        wc_min_row.set_visible(wc_every.get_active_id() == "custom")
+        n = len(wall_pictures(wc_folder.get_filename() or "", limit=10000)) if wc_folder.get_filename() else 0
+        wc_count.set_text("No pictures in this folder yet." if not n else
+                          "1 picture" if n == 1 else "%d pictures" % n)
+    for w, sig in ((wc_on, "notify::active"), (wc_every, "changed"), (wc_folder, "file-set")):
+        w.connect(sig, wc_sync)
+
+    def wc_skip(*_a):
+        f = wc_form()
+        env = dict(os.environ, WALLCYCLE_FOLDER=f["folder"], WALLCYCLE_ORDER=f["order"])
+        if DRY:
+            print("+ WallCycle.sh --next")
+            return
+        try:
+            subprocess.run([os.path.join(SCRIPTS_DIR, "WallCycle.sh"), "--next"], env=env, timeout=20,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        show_now(current_wallpaper())
+    wc_next.connect("clicked", wc_skip)
+
+    def apply_wall_page(safe):
+        """(Apply) save the slideshow and restart it when it changed."""
+        new = wc_form()
+        settings["wallpaper"] = new
+        safe("wallpaper", apply_wallcycle, settings)
+        if wallcycle_choice(settings) != wc_saved["v"]:
+            wc_saved["v"] = wallcycle_choice(settings)
+            run([os.path.join(SCRIPTS_DIR, "WallCycle.sh"), "--start"])
+            GLib.timeout_add(1500, lambda: show_now(current_wallpaper()) and False)
+
+    def wall_mapped(*_a):
+        if flow_gen["n"] == 0:                          # (the thumbnails are only read when the tab is opened)
+            fill_flow(browse.get_filename() or WALL_DIR)
+        show_now(current_wallpaper())
+        wc_sync()
+    wlp.connect("map", wall_mapped)
+    add_page("wallpaper", scrolled(wlp))
+
     # ---------------- buttons
     bar = Gtk.Box(spacing=10)
     for side in ("top", "bottom", "start", "end"):
@@ -6443,8 +6936,9 @@ def launch_gui(confirm=True, tab=None):
         safe("colors", apply_colors, settings)
         provider.load_from_data(css_for(acc["v"]))
         settings["gaps"] = {"inner": int(gap_inner.get_value()), "outer": int(gap_outer.get_value()),
-                            "smart": gap_smart.get_active()}
+                            "smart": gap_smart.get_active(), "corners": int(corner_sc.get_value())}
         safe("gaps", apply_gaps, settings, reload=True)
+        safe("rounded corners", apply_corners, settings, restart=True)
         settings["apps"] = dict(app_new)
         safe("apps", apply_apps, settings)
         settings["tiling"] = {"mode": tiling_mode.get_active_id() or "dwindle"}
@@ -6452,6 +6946,7 @@ def launch_gui(confirm=True, tab=None):
         settings["gestures"] = {"enabled": gest_on.get_active(), "natural": gest_dir.get_active_id() != "reverse"}
         settings["sound"] = {"volume_feedback": fx_vol.get_active(), "screenshot_sound": fx_shot.get_active()}
         safe("sound", apply_sound, settings)
+        apply_wall_page(safe)
         safe("keybindings", kb_commit)
         chosen = [n for n, cb in bar_checks.items() if cb.get_active()]
         if bar_all.get_active() or not chosen:
@@ -6464,6 +6959,7 @@ def launch_gui(confirm=True, tab=None):
                            "style": bar_style.get_active_id() or BAR_DEFAULT["style"],
                            "divider": bar_div.get_active_id() or BAR_DEFAULT["divider"],
                            "title": bar_title.get_active(), "media": bar_media.get_active(),
+                           "clock": bar_clock.get_active_id() or "24",
                            "spacing": clean_spacing(int(bar_space.get_value()))}
         settings["bar"]["bg_mode"], settings["bar"]["bg_opacity"], settings["bar"]["bg_color"] = bar_bg_now()
         old_icon = wifi_tray_icon(settings)

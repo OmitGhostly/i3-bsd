@@ -76,18 +76,10 @@ fi
 
 # where to get updates: the repo this desktop was installed from (written by install.sh). An ssh address is
 # turned into https: the update runs in the background, where no ssh key password can be typed.
-# The BSD version used to live with the Linux one (OmitGhostly/i3, before that OmitGhostly/i3wm-config): those
-# addresses are switched to this repo (once).
 repo_url() {
   local u
   u="$(head -n1 "$state/repo-url" 2>/dev/null)"
   case "$u" in git@github.com:*) u="https://github.com/${u#git@github.com:}" ;; esac
-  case "$(printf '%s' "$u" | tr '[:upper:]' '[:lower:]')" in
-    https://github.com/omitghostly/i3wm-config|https://github.com/omitghostly/i3wm-config.git|https://github.com/omitghostly/i3wm-config/ \
-    |https://github.com/omitghostly/i3|https://github.com/omitghostly/i3.git|https://github.com/omitghostly/i3/)
-      u="$default_url"
-      printf '%s\n' "$u" >"$state/repo-url" 2>/dev/null || true ;;
-  esac
   case "$u" in
     https://*|file://*|/*) ;;
     *) u="$default_url" ;;
@@ -147,20 +139,12 @@ reload_desktop() {
   i3-msg -q reload >/dev/null 2>&1 || true   # (also restarts the bar)
 }
 
-# A desktop that has just moved between the Linux and the BSD version of these dots (their installers hand over to
-# each other): the version it got there is the one installed now
-take_handoff() {
-  [ -s "$state/handoff" ] || return 0
-  mv -f "$state/handoff" "$state/applied" 2>/dev/null || true
-}
-
 update() {
   if [ ! -f "$cfg/i3/.i3wm-dots-installed" ]; then
     say "the i3 config in $cfg/i3 was not installed by i3wm-dots - nothing to update"
     return 0
   fi
   local new old subject
-  take_handoff
   new="$(fetch)" || return 1
   old="$(cat "$state/applied" 2>/dev/null)"
   if [ -n "$new" ] && [ "$new" = "$old" ]; then
@@ -223,7 +207,6 @@ check() {
     return 0
   fi
   local new
-  take_handoff
   new="$(fetch)" || return 1
   date +%s >"$state/last-run"
   if [ -z "$new" ] || [ "$new" = "$(cat "$state/applied" 2>/dev/null)" ]; then
@@ -265,7 +248,6 @@ case "$mode" in
   --off)    : >"$state/off"; echo "no more checks for a newer version (i3dots-update still updates by hand)"; exit 0 ;;
   --on)     rm -f "$state/off"; echo "after packages change you get a notification when a newer version is out"; exit 0 ;;
   --status)
-    take_handoff
     echo "checks for a newer version: $(auto_on && echo "on (a notification when one is out; installing is up to you)" || echo off)"
     echo "repo:              $(repo_url)"
     a="$(cat "$state/applied" 2>/dev/null)"; echo "installed version: ${a:0:7}${a:+ }$( [ -n "$a" ] && git -C "$repo" log -1 --format='(%cd) %s' --date=short "$a" 2>/dev/null)"
@@ -279,7 +261,6 @@ case "$mode" in
     exit 0 ;;
   --check)
     flock -w 300 9 || exit 1
-    take_handoff
     new="$(fetch)" || exit 1
     if [ "$new" = "$(cat "$state/applied" 2>/dev/null)" ]; then echo "up to date (${new:0:7})"
     else echo "a newer version is available: ${new:0:7} $(git -C "$repo" log -1 --format=%s FETCH_HEAD 2>/dev/null)"; fi

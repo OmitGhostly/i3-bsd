@@ -21,7 +21,7 @@ while pgrep -u "$UID" -x polybar >/dev/null; do sleep 0.1; done
 F="FantasqueSansM Nerd Font Mono"
 BAR_BOTTOM=false; BAR_MONITORS=""; BAR_HEIGHT=38; BAR_STYLE=solid; BAR_NAME=blocks
 BAR_FONT_SPEC="$F:size=13.5;3"; BAR_ICON_SPEC="$F:size=16.5;4"; BAR_CAP_SPEC="$F:size=27.277;5"
-BAR_LEFT="i3"
+BAR_LEFT="i3"; BAR_TIME="%H:%M"
 BAR_RIGHT="network pulseaudio backlight caffeine nightlight battery cpu memory gpu date powermenu"
 BAR_RIGHT_B=""; BAR_LEFT_B=""
 # crisp text: grayscale anti-aliasing with light hinting (applies to programs started afterwards too)
@@ -51,7 +51,7 @@ case "$BAR_NAME" in main|blocks) ;; *) BAR_NAME=blocks ;; esac
 # (the joined-up styles' workspace strip is a python script: without a working python3, polybar's own module)
 python3 -c 'import json, socket, struct' >/dev/null 2>&1 || BAR_LEFT_B=$(printf '%s' "$BAR_LEFT_B" | sed 's/b-wsj/b-i3/')
 export BAR_BOTTOM BAR_HEIGHT BAR_FONT_SPEC BAR_ICON_SPEC BAR_CAP_SPEC BORDER_BOTTOM BORDER_TOP BAR_STYLE \
-       BAR_LEFT BAR_LEFT_B BAR_RIGHT BAR_RIGHT_B
+       BAR_LEFT BAR_LEFT_B BAR_RIGHT BAR_RIGHT_B BAR_TIME
 # No polybar (NetBSD has no package of it): i3's own bar takes its place. i3 reads its bar from its config, so the
 # bar goes into bar-fallback.conf (the i3 config includes it) and i3 restarts in place once (windows stay where they
 # are; a reload would not start the bar - i3 starts i3bar only when it starts) - which runs this script again; it

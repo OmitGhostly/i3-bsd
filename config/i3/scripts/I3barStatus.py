@@ -53,6 +53,20 @@ def items():
     return DEFAULT_ITEMS
 
 
+def clock_format():
+    """24-hour or 12-hour, as chosen in Settings > Appearance (launch.sh keeps it in bar-env)."""
+    try:
+        with open(os.path.join(STATE, "bar-env"), encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("BAR_TIME="):
+                    v = " ".join(shlex.split(line.split("=", 1)[1]))
+                    if v in ("%H:%M", "%I:%M %p"):
+                        return v
+    except (OSError, ValueError):
+        pass
+    return "%H:%M"
+
+
 def accent():
     """(colour, text colour on it) from Settings > Colors."""
     a = "ffffff"
@@ -88,7 +102,7 @@ def texts(wanted):
         elif m in SCRIPT:
             res[m] = TAGS.sub("", run([os.path.join(SCRIPTS, SCRIPT[m][0])] + SCRIPT[m][1:]).strip().split("\n")[0])
         elif m == "date":
-            res[m] = time.strftime("%a %d %b  %H:%M")
+            res[m] = time.strftime("%a %d %b  " + clock_format())
         elif m == "powermenu":
             res[m] = "󰐥"
     return res

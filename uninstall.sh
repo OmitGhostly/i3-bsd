@@ -90,10 +90,8 @@ detect_family() {
   esac
 }
 FAMILY="$(detect_family)"
-# Linux has its own version of these dots (github.com/OmitGhostly/i3), with its own uninstaller
 if [ "${I3DOTS_OS:-$(uname -s)}" = Linux ]; then
-  die "This is the uninstaller of the version for FreeBSD, GhostBSD, OpenBSD and NetBSD. On Linux use i3dots-uninstall
-   or the one in https://github.com/OmitGhostly/i3"
+  die "This uninstaller is made for FreeBSD, GhostBSD, OpenBSD and NetBSD - it does not run on Linux."
 fi
 
 # =============================================================================
@@ -126,7 +124,7 @@ remove_rc_lines() {   # take the installer's lines (marker + the line after it) 
   local rc real
   for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
     [ -f "$rc" ] || continue
-    grep -qE '^# i3wm-dots: (pokemon fastfetch|see-through asciiquarium|black / grey / white prompt)' "$rc" || continue
+    grep -qE '^(# i3wm-dots: (pokemon fastfetch|see-through asciiquarium|black / grey / white prompt)|#i3wm-dots-off# )' "$rc" || continue
     if [ "$dry" -eq 1 ]; then echo "   + remove the i3wm-dots lines from $rc"; continue; fi
     # (written into the real file through a copy that keeps its permissions: a ~/.zshrc linked from a dotfiles
     #  folder stays a link)
@@ -134,6 +132,7 @@ remove_rc_lines() {   # take the installer's lines (marker + the line after it) 
     cp -p -- "$real" "$real.i3tmp" || continue
     awk 'skip { skip = 0; next }
          /^# i3wm-dots: (pokemon fastfetch|see-through asciiquarium|black \/ grey \/ white prompt)/ { skip = 1; if (blank) blank = 0; next }
+         index($0, "#i3wm-dots-off# ") == 1 { $0 = substr($0, 17) }   # (a greeting of yours the installer turned off)
          { if (blank) print ""; blank = 0 }
          /^$/ { blank = 1; next }
          { print }
@@ -205,6 +204,8 @@ config_step() {
     fi
     gone "the crontab line for the update checks"
   fi
+  # the wallpaper slideshow (Settings > Wallpaper), if it runs
+  [ "$dry" -eq 0 ] && [ -x "$cfg/i3/scripts/WallCycle.sh" ] && bash "$cfg/i3/scripts/WallCycle.sh" --stop >/dev/null 2>&1
 
   # the config folders the installer made; your originals come back from the newest *.bak-*.
   # Ours is first moved aside as .i3dots-removing-NAME, then your backup goes in its place, then the aside copy is
