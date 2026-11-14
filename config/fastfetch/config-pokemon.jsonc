@@ -70,7 +70,7 @@
             "type": "command",
             "key": "󱦟 ",
             "keyColor": "white",
-            "text": "echo $(( ($(date +%s) - $(stat -c %W /)) / 86400 )) days"
+            "text": "echo $(( ($(date +%s) - $(stat -f %B / 2>/dev/null || stat -c %W /)) / 86400 )) days"
         },
         {
             "type": "custom",
